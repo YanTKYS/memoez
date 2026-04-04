@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,19 +8,21 @@ import { spacing } from '@/ui/theme/spacing';
 import { formatRelativeTime } from '@/lib/dateUtils';
 
 interface Props {
-  note:     Note;
-  onPress:  () => void;
-  isGrid?:  boolean;
+  note:    Note;
+  /** stable な useCallback 関数を渡すこと（React.memo の効果を維持するため） */
+  onPress: (note: Note) => void;
+  isGrid?: boolean;
 }
 
 export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = true }: Props) {
   const bgColor  = NOTE_COLOR_LIGHT[note.color];
   const maxLines = isGrid ? 5 : 2;
+  const handlePress = useCallback(() => onPress(note), [onPress, note]);
 
   return (
     <TouchableOpacity
       style={[styles.card, { backgroundColor: bgColor }, isGrid ? styles.grid : styles.list]}
-      onPress={onPress}
+      onPress={handlePress}
       activeOpacity={0.85}
     >
       {/* タイトル */}

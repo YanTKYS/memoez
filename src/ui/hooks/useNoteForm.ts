@@ -3,31 +3,32 @@ import type { Note, NoteType, NoteColor } from '@/domain/entities/Note';
 import { isNoteEmpty } from '@/domain/entities/Note';
 
 export interface DraftChecklistItem {
-  /** 既存アイテムのid (新規はundefined) */
   key:       string;
   text:      string;
   isChecked: boolean;
 }
 
 export interface NoteFormState {
-  title:         string;
-  content:       string;
-  type:          NoteType;
-  color:         NoteColor;
+  title:          string;
+  content:        string;
+  type:           NoteType;
+  color:          NoteColor;
   checklistItems: DraftChecklistItem[];
 }
 
 export interface UseNoteFormReturn {
-  form:             NoteFormState;
-  setTitle:         (v: string) => void;
-  setContent:       (v: string) => void;
-  setType:          (v: NoteType) => void;
-  setColor:         (v: NoteColor) => void;
-  addChecklistItem: () => void;
+  form:                NoteFormState;
+  setTitle:            (v: string) => void;
+  setContent:          (v: string) => void;
+  setType:             (v: NoteType) => void;
+  setColor:            (v: NoteColor) => void;
+  addChecklistItem:    () => void;
   updateChecklistItem: (key: string, text: string) => void;
   toggleChecklistItem: (key: string) => void;
   removeChecklistItem: (key: string) => void;
-  isEmpty:          () => boolean;
+  /** ロード済みノートでフォームを上書き初期化する */
+  resetForm:           (note: Note) => void;
+  isEmpty:             () => boolean;
 }
 
 function noteToForm(note: Note): NoteFormState {
@@ -52,30 +53,35 @@ const defaultForm = (): NoteFormState => ({
   checklistItems: [],
 });
 
-export function useNoteForm(initialNote?: Note): UseNoteFormReturn {
+export function useNoteForm(): UseNoteFormReturn {
   const keyCounterRef = useRef(0);
   const genKey = useCallback(() => `new-${++keyCounterRef.current}`, []);
 
-  const [form, setForm] = useState<NoteFormState>(
-    initialNote ? noteToForm(initialNote) : defaultForm(),
-  );
+  // 初期値は常に空。既存ノートは resetForm() で上書きする。
+  const [form, setForm] = useState<NoteFormState>(defaultForm());
+
+  const resetForm = useCallback((note: Note) => {
+    setForm(noteToForm(note));
+  }, []);
 
   const setTitle   = useCallback((v: string) => setForm((f) => ({ ...f, title: v })),   []);
   const setContent = useCallback((v: string) => setForm((f) => ({ ...f, content: v })), []);
-  const setType    = useCallback((v: NoteType) => {
+
+  const setType = useCallback((v: NoteType) => {
     setForm((f) => ({
       ...f,
-      type:           v,
-      // TEXT→CHECKLISTに切り替え時、本文の行をアイテムに変換
-      checklistItems: v === 'CHECKLIST' && f.checklistItems.length === 0 && f.content.trim()
-        ? f.content
-            .split('\n')
-            .filter((l) => l.trim())
-            .map((l) => ({ key: genKey(), text: l.trim(), isChecked: false }))
-        : f.checklistItems,
+      type: v,
+      checklistItems:
+        v === 'CHECKLIST' && f.checklistItems.length === 0 && f.content.trim()
+          ? f.content
+              .split('\n')
+              .filter((l) => l.trim())
+              .map((l) => ({ key: genKey(), text: l.trim(), isChecked: false }))
+          : f.checklistItems,
       content: v === 'CHECKLIST' ? '' : f.content,
     }));
-  }, []);
+  }, [genKey]);
+
   const setColor = useCallback((v: NoteColor) => setForm((f) => ({ ...f, color: v })), []);
 
   const addChecklistItem = useCallback(() => {
@@ -86,7 +92,7 @@ export function useNoteForm(initialNote?: Note): UseNoteFormReturn {
         { key: genKey(), text: '', isChecked: false },
       ],
     }));
-  }, []);
+  }, [genKey]);
 
   const updateChecklistItem = useCallback((key: string, text: string) => {
     setForm((f) => ({
@@ -113,13 +119,16 @@ export function useNoteForm(initialNote?: Note): UseNoteFormReturn {
     }));
   }, []);
 
-  const isEmpty = useCallback(() =>
-    isNoteEmpty({
-      title:          form.title,
-      content:        form.content,
-      checklistItems: form.checklistItems.filter((i) => i.text.trim()) as any,
-    }),
-  [form]);
+  const isEmpty = useCallback(
+    () =>
+      isNoteEmpty({
+        title:          form.title,
+        content:        form.content,
+        // DraftChecklistItem は id 等を持たないが isNoteEmpty は length のみ参照
+        checklistItems: form.checklistItems.filter((i) => i.text.trim()) as any,
+      }),
+    [form],
+  );
 
   return {
     form,
@@ -131,6 +140,7 @@ export function useNoteForm(initialNote?: Note): UseNoteFormReturn {
     updateChecklistItem,
     toggleChecklistItem,
     removeChecklistItem,
+    resetForm,
     isEmpty,
   };
 }

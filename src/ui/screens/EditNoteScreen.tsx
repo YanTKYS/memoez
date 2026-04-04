@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
   View,
   ScrollView,
@@ -8,6 +8,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
 } from 'react-native';
 import {
   Appbar,
@@ -34,31 +35,27 @@ interface Props {
 }
 
 export function EditNoteScreen({ noteId }: Props) {
-  const router              = useRouter();
-  const [note, setNote]     = useState<Note | null>(null);
+  const router   = useRouter();
+  const [note,        setNote]        = useState<Note | null>(null);
   const [loadingNote, setLoadingNote] = useState(!!noteId);
-  const [saving,     setSaving]  = useState(false);
-  const [showColor,  setShowColor]  = useState(false);
-  const [showLabels, setShowLabels] = useState(false);
-  const [snackMsg,   setSnackMsg]   = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [showColor,   setShowColor]   = useState(false);
+  const [showLabels,  setShowLabels]  = useState(false);
+  const [snackMsg,    setSnackMsg]    = useState('');
 
-  // アンマウント後の state 更新を防ぐフラグ
   const mountedRef   = useRef(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 保存中の二重実行防止
   const savingRef    = useRef(false);
 
-  useEffect(() => {
-    return () => { mountedRef.current = false; };
-  }, []);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const {
     form,
     setTitle, setContent, setType, setColor,
     addChecklistItem, updateChecklistItem,
     toggleChecklistItem, removeChecklistItem,
-    isEmpty,
-  } = useNoteForm(note ?? undefined);
+    resetForm, isEmpty,
+  } = useNoteForm();
 
   // ─── 既存ノート読み込み ──────────────────────────────────────────────────
   useEffect(() => {
@@ -67,20 +64,23 @@ export function EditNoteScreen({ noteId }: Props) {
       .findById(noteId)
       .then((n) => {
         if (!mountedRef.current) return;
-        setNote(n);
+        if (n) {
+          setNote(n);
+          // ★ フォームをロード済みデータで初期化 (Critical fix)
+          resetForm(n);
+        }
         setLoadingNote(false);
       })
       .catch(() => {
         if (!mountedRef.current) return;
         setLoadingNote(false);
       });
-  }, [noteId]);
+  }, [noteId]); // resetForm は安定した useCallback なので deps 省略安全
 
   // ─── 保存ロジック ────────────────────────────────────────────────────────
-  // useCallback で form を deps に取り、常に最新の form を参照する
   const saveNote = useCallback(async (): Promise<void> => {
-    if (savingRef.current) return;          // 二重保存防止
-    if (isEmpty())         return;          // 空メモは保存しない
+    if (savingRef.current) return;
+    if (isEmpty())         return;
 
     savingRef.current = true;
     if (mountedRef.current) setSaving(true);
@@ -120,32 +120,36 @@ export function EditNoteScreen({ noteId }: Props) {
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [form, note, isEmpty]); // form が変わるたびに最新版を参照
+  }, [form, note, isEmpty]);
 
   // ─── 自動保存 (debounce 1秒) ─────────────────────────────────────────────
   useEffect(() => {
     if (loadingNote) return;
-
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       if (mountedRef.current) saveNote();
     }, 1000);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [loadingNote, saveNote]);
 
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [loadingNote, saveNote]); // saveNote が deps に入るので form 変化も捕捉できる
-
-  // ─── 戻る ────────────────────────────────────────────────────────────────
-  const handleBack = async () => {
-    // debounce タイマーをキャンセルして即時保存
+  // ─── 保存して戻る ────────────────────────────────────────────────────────
+  const handleBack = useCallback(async () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!isEmpty()) await saveNote();
     router.back();
-  };
+  }, [isEmpty, saveNote, router]);
+
+  // ─── Android ハードウェアバックボタン ─────────────────────────────────
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true; // デフォルト動作を抑制
+    });
+    return () => sub.remove();
+  }, [handleBack]);
 
   // ─── 削除 ────────────────────────────────────────────────────────────────
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     Alert.alert('メモを削除', 'このメモを削除しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       {
@@ -158,14 +162,31 @@ export function EditNoteScreen({ noteId }: Props) {
         },
       },
     ]);
-  };
+  }, [note, router]);
 
   // ─── ピン留めトグル ──────────────────────────────────────────────────────
-  const handlePin = async () => {
+  const handlePin = useCallback(async () => {
     if (!note) return;
     const updated = await getNoteRepository().togglePin(note.id);
     if (mountedRef.current) setNote(updated);
-  };
+  }, [note]);
+
+  // ─── ラベル変更後の反映 ──────────────────────────────────────────────────
+  const handleLabelChanged = useCallback(async () => {
+    if (!note) return;
+    const updated = await getNoteRepository().findById(note.id);
+    if (updated && mountedRef.current) setNote(updated);
+  }, [note]);
+
+  // ─── 新規ノートの即時保存（ラベルボタンを有効にするため） ───────────────
+  // note が null のまま ラベルボタンを押したとき、先に保存してから Sheet を開く
+  const handleLabelPress = useCallback(async () => {
+    if (!note && !isEmpty()) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      await saveNote();
+    }
+    if (mountedRef.current) setShowLabels(true);
+  }, [note, isEmpty, saveNote]);
 
   const bgColor = NOTE_COLOR_LIGHT[form.color];
 
@@ -183,29 +204,24 @@ export function EditNoteScreen({ noteId }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* AppBar */}
         <Appbar.Header style={{ backgroundColor: bgColor }} elevated={false}>
           <Appbar.BackAction onPress={handleBack} />
           <Appbar.Content title="" />
-          {note && (
-            <Appbar.Action
-              icon={note.isPinned ? 'pin' : 'pin-outline'}
-              onPress={handlePin}
-            />
-          )}
+          <Appbar.Action
+            icon={note?.isPinned ? 'pin' : 'pin-outline'}
+            onPress={handlePin}
+          />
           {note && (
             <Appbar.Action icon="delete-outline" onPress={handleDelete} />
           )}
           {saving && <ActivityIndicator size="small" style={{ marginRight: 8 }} />}
         </Appbar.Header>
 
-        {/* 本文エリア */}
         <ScrollView
           style={styles.scroll}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
         >
-          {/* タイトル */}
           <TextInput
             style={styles.titleInput}
             placeholder="タイトル"
@@ -218,7 +234,6 @@ export function EditNoteScreen({ noteId }: Props) {
 
           <Divider style={styles.divider} />
 
-          {/* テキスト本文 */}
           {form.type === 'TEXT' && (
             <TextInput
               style={styles.contentInput}
@@ -231,7 +246,6 @@ export function EditNoteScreen({ noteId }: Props) {
             />
           )}
 
-          {/* チェックリスト */}
           {form.type === 'CHECKLIST' && (
             <View style={styles.checklist}>
               {form.checklistItems
@@ -239,10 +253,12 @@ export function EditNoteScreen({ noteId }: Props) {
                 .map((item) => (
                   <ChecklistRow
                     key={item.key}
-                    item={item}
-                    onChangeText={(t) => updateChecklistItem(item.key, t)}
-                    onToggle={() => toggleChecklistItem(item.key)}
-                    onRemove={() => removeChecklistItem(item.key)}
+                    itemKey={item.key}
+                    text={item.text}
+                    isChecked={item.isChecked}
+                    onChangeText={updateChecklistItem}
+                    onToggle={toggleChecklistItem}
+                    onRemove={removeChecklistItem}
                   />
                 ))}
               <TouchableOpacity
@@ -254,7 +270,6 @@ export function EditNoteScreen({ noteId }: Props) {
                 <Text variant="bodyMedium" style={{ color: '#888' }}>アイテムを追加</Text>
               </TouchableOpacity>
 
-              {/* チェック済み */}
               {form.checklistItems.some((i) => i.isChecked) && (
                 <>
                   <Divider style={styles.divider} />
@@ -266,10 +281,12 @@ export function EditNoteScreen({ noteId }: Props) {
                     .map((item) => (
                       <ChecklistRow
                         key={item.key}
-                        item={item}
-                        onChangeText={(t) => updateChecklistItem(item.key, t)}
-                        onToggle={() => toggleChecklistItem(item.key)}
-                        onRemove={() => removeChecklistItem(item.key)}
+                        itemKey={item.key}
+                        text={item.text}
+                        isChecked={item.isChecked}
+                        onChangeText={updateChecklistItem}
+                        onToggle={toggleChecklistItem}
+                        onRemove={removeChecklistItem}
                         done
                       />
                     ))}
@@ -279,7 +296,6 @@ export function EditNoteScreen({ noteId }: Props) {
           )}
         </ScrollView>
 
-        {/* BottomBar */}
         <View style={[styles.bottomBar, { backgroundColor: bgColor }]}>
           <IconButton
             icon={form.type === 'TEXT' ? 'checkbox-marked-outline' : 'text'}
@@ -291,13 +307,12 @@ export function EditNoteScreen({ noteId }: Props) {
             size={22}
             onPress={() => setShowColor(true)}
           />
-          {note && (
-            <IconButton
-              icon="label-outline"
-              size={22}
-              onPress={() => setShowLabels(true)}
-            />
-          )}
+          {/* 新規ノートでも押せる（先に保存してからSheetを開く） */}
+          <IconButton
+            icon="label-outline"
+            size={22}
+            onPress={handleLabelPress}
+          />
           {note && (
             <Text variant="labelSmall" style={styles.updatedAt}>
               {formatRelativeTime(note.updatedAt)}
@@ -306,7 +321,6 @@ export function EditNoteScreen({ noteId }: Props) {
         </View>
       </KeyboardAvoidingView>
 
-      {/* カラーピッカー */}
       <ColorPicker
         visible={showColor}
         current={form.color}
@@ -314,17 +328,13 @@ export function EditNoteScreen({ noteId }: Props) {
         onDismiss={() => setShowColor(false)}
       />
 
-      {/* ラベルピッカー */}
       {note && (
         <LabelPickerSheet
           visible={showLabels}
           noteId={note.id}
           currentLabels={note.labels}
           onDismiss={() => setShowLabels(false)}
-          onChanged={async () => {
-            const updated = await getNoteRepository().findById(note.id);
-            if (updated && mountedRef.current) setNote(updated);
-          }}
+          onChanged={handleLabelChanged}
         />
       )}
 
@@ -339,78 +349,70 @@ export function EditNoteScreen({ noteId }: Props) {
   );
 }
 
-// ─── ChecklistRow ─────────────────────────────────────────────────────────────
+// ─── ChecklistRow (メモ化済み) ────────────────────────────────────────────────
+// props をフラット化し onChangeText(key, text) のシグネチャにすることで
+// 親から渡す stable な useCallback と組み合わせて不要な再レンダーを防ぐ
 
 interface RowProps {
-  item:         { key: string; text: string; isChecked: boolean };
-  onChangeText: (v: string) => void;
-  onToggle:     () => void;
-  onRemove:     () => void;
+  itemKey:      string;
+  text:         string;
+  isChecked:    boolean;
+  onChangeText: (key: string, text: string) => void;
+  onToggle:     (key: string) => void;
+  onRemove:     (key: string) => void;
   done?:        boolean;
 }
 
-function ChecklistRow({ item, onChangeText, onToggle, onRemove, done }: RowProps) {
+const ChecklistRow = memo(function ChecklistRow({
+  itemKey, text, isChecked, onChangeText, onToggle, onRemove, done,
+}: RowProps) {
   return (
     <View style={rowStyles.row}>
       <TouchableOpacity
-        onPress={onToggle}
+        onPress={() => onToggle(itemKey)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
         <MaterialCommunityIcons
-          name={item.isChecked ? 'checkbox-marked-outline' : 'checkbox-blank-outline'}
+          name={isChecked ? 'checkbox-marked-outline' : 'checkbox-blank-outline'}
           size={22}
-          color={item.isChecked ? '#999' : '#444'}
+          color={isChecked ? '#999' : '#444'}
         />
       </TouchableOpacity>
       <TextInput
         style={[rowStyles.input, done && rowStyles.done]}
-        value={item.text}
-        onChangeText={onChangeText}
+        value={text}
+        onChangeText={(t) => onChangeText(itemKey, t)}
         placeholder="アイテム"
         placeholderTextColor="#bbb"
         multiline={false}
       />
       <TouchableOpacity
-        onPress={onRemove}
+        onPress={() => onRemove(itemKey)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
         <MaterialCommunityIcons name="close" size={18} color="#bbb" />
       </TouchableOpacity>
     </View>
   );
-}
+});
 
 const rowStyles = StyleSheet.create({
   row: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            spacing.sm,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
     paddingVertical: 6,
-    minHeight:      44, // Android タップターゲット最小値
+    minHeight:       44,
   },
-  input: {
-    flex:     1,
-    fontSize: 15,
-    color:    '#333',
-  },
-  done: {
-    textDecorationLine: 'line-through',
-    color:              '#999',
-  },
+  input: { flex: 1, fontSize: 15, color: '#333' },
+  done:  { textDecorationLine: 'line-through', color: '#999' },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container:     { flex: 1 },
+  center:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll:        { flex: 1 },
-  scrollContent: {
-    padding:       spacing.md,
-    paddingBottom: 80,
-  },
+  scrollContent: { padding: spacing.md, paddingBottom: 80 },
   titleInput: {
     fontSize:        20,
     fontWeight:      '600',
@@ -428,16 +430,13 @@ const styles = StyleSheet.create({
   },
   checklist: { gap: 2 },
   addItem: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            spacing.xs,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.xs,
     paddingVertical: spacing.sm,
     minHeight:       44,
   },
-  doneLabel: {
-    color:        '#888',
-    marginBottom: spacing.xs,
-  },
+  doneLabel: { color: '#888', marginBottom: spacing.xs },
   bottomBar: {
     flexDirection:     'row',
     alignItems:        'center',

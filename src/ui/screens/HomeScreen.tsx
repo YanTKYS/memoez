@@ -7,7 +7,6 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Appbar, FAB, Text, ActivityIndicator } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NoteCard } from '@/ui/components/NoteCard';
@@ -24,27 +23,27 @@ export function HomeScreen() {
   const toggleLayout = useSettingsStore((s) => s.toggleLayout);
   const { notes, loading, error, refresh } = useNotes(false);
 
-  // 画面フォーカス時にリロード (編集後に戻ってきたとき)
   useFocusEffect(
     useCallback(() => { refresh(); }, [refresh]),
   );
 
-  const pinned  = notes.filter((n) => n.isPinned);
-  const regular = notes.filter((n) => !n.isPinned);
+  // ★ useMemo で安定した参照を確保 → listItems の useMemo が正しく動く
+  const pinned = useMemo(() => notes.filter((n) => n.isPinned),  [notes]);
+  const regular = useMemo(() => notes.filter((n) => !n.isPinned), [notes]);
 
-  const openNote = (note: Note) => router.push(`/note/${note.id}`);
-  const newNote  = ()           => router.push('/note/new');
+  // ★ useCallback で安定した関数参照 → NoteCard の React.memo が正しく機能する
+  const openNote = useCallback((note: Note) => router.push(`/note/${note.id}`), [router]);
+  const newNote  = useCallback(() => router.push('/note/new'), [router]);
 
-  const isGrid    = layoutMode === 'grid';
-  const numCols   = isGrid ? (width >= 600 ? 3 : 2) : 1;
-  const colGap    = spacing.sm;
+  const isGrid   = layoutMode === 'grid';
+  const numCols  = isGrid ? (width >= 600 ? 3 : 2) : 1;
+  const colGap   = spacing.sm;
   const cardWidth = isGrid
     ? (width - spacing.md * 2 - colGap * (numCols - 1)) / numCols
     : undefined;
 
-  // ─── リストデータ (メモ化) ────────────────────────────────────────────────
   type SectionItem =
-    | { kind: 'header'; label: string }
+    | { kind: 'header';   label: string }
     | { kind: 'grid-row'; notes: Note[]; rowKey: string }
     | { kind: 'list-item'; note: Note };
 
@@ -57,7 +56,6 @@ export function HomeScreen() {
       if (isGrid) {
         for (let i = 0; i < noteList.length; i += numCols) {
           const chunk = noteList.slice(i, i + numCols);
-          // ID ベースのキーで React の再利用ヒントを安定させる
           items.push({
             kind:   'grid-row',
             notes:  chunk,
@@ -74,10 +72,8 @@ export function HomeScreen() {
     return items;
   }, [pinned, regular, isGrid, numCols]);
 
-  // ─── render ───────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* AppBar */}
       <Appbar.Header elevated>
         <Appbar.Content title="MemoEZ" />
         <Appbar.Action
@@ -94,7 +90,6 @@ export function HomeScreen() {
         />
       </Appbar.Header>
 
-      {/* コンテンツ */}
       {loading && notes.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator />
@@ -114,9 +109,9 @@ export function HomeScreen() {
       ) : (
         <FlatList
           data={listItems}
-          keyExtractor={(item, i) => {
-            if (item.kind === 'header')    return `header-${item.label}`;
-            if (item.kind === 'grid-row')  return item.rowKey;
+          keyExtractor={(item) => {
+            if (item.kind === 'header')   return `header-${item.label}`;
+            if (item.kind === 'grid-row') return item.rowKey;
             return `note-${item.note.id}`;
           }}
           contentContainerStyle={styles.list}
@@ -136,10 +131,10 @@ export function HomeScreen() {
                 <View style={[styles.gridRow, { gap: colGap }]}>
                   {item.notes.map((note) => (
                     <View key={note.id} style={{ width: cardWidth }}>
-                      <NoteCard note={note} onPress={() => openNote(note)} isGrid />
+                      {/* ★ openNote は stable → NoteCard の React.memo が有効 */}
+                      <NoteCard note={note} onPress={openNote} isGrid />
                     </View>
                   ))}
-                  {/* 端数埋め */}
                   {Array.from({ length: numCols - item.notes.length }).map((_, i) => (
                     <View key={`empty-${i}`} style={{ width: cardWidth }} />
                   ))}
@@ -149,7 +144,7 @@ export function HomeScreen() {
             return (
               <NoteCard
                 note={item.note}
-                onPress={() => openNote(item.note)}
+                onPress={openNote}
                 isGrid={false}
               />
             );
@@ -157,7 +152,6 @@ export function HomeScreen() {
         />
       )}
 
-      {/* FAB */}
       <FAB
         icon="plus"
         label="メモ"
@@ -169,32 +163,15 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  center: {
-    flex:           1,
-    alignItems:     'center',
-    justifyContent: 'center',
-  },
-  list: {
-    paddingHorizontal: spacing.md,
-    paddingBottom:     100,
-  },
+  container:     { flex: 1, backgroundColor: '#fff' },
+  center:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  list:          { paddingHorizontal: spacing.md, paddingBottom: 100 },
   sectionHeader: {
-    color:        '#888',
-    marginTop:    spacing.md,
-    marginBottom: spacing.xs,
+    color:         '#888',
+    marginTop:     spacing.md,
+    marginBottom:  spacing.xs,
     letterSpacing: 0.8,
   },
-  gridRow: {
-    flexDirection: 'row',
-    marginBottom:  spacing.sm,
-  },
-  fab: {
-    position: 'absolute',
-    right:    spacing.md,
-    bottom:   spacing.xl,
-  },
+  gridRow: { flexDirection: 'row', marginBottom: spacing.sm },
+  fab:     { position: 'absolute', right: spacing.md, bottom: spacing.xl },
 });

@@ -1,4 +1,4 @@
-import { eq, desc, isNull, and, or, like, sql } from 'drizzle-orm';
+import { eq, desc, isNull, and, or, like, sql, inArray } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import * as schema from '../db/schema';
 import { notes, checklistItems, noteLabels, labels } from '../db/schema';
@@ -25,7 +25,7 @@ export class DrizzleNoteRepository implements INoteRepository {
       .from(checklistItems)
       .where(
         and(
-          sql`${checklistItems.noteId} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`,
+          inArray(checklistItems.noteId, ids),
           isNull(checklistItems.deletedAt),
         ),
       )
@@ -38,7 +38,7 @@ export class DrizzleNoteRepository implements INoteRepository {
       .innerJoin(labels, eq(noteLabels.labelId, labels.id))
       .where(
         and(
-          sql`${noteLabels.noteId} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`,
+          inArray(noteLabels.noteId, ids),
           isNull(labels.deletedAt),
         ),
       );
@@ -108,9 +108,7 @@ export class DrizzleNoteRepository implements INoteRepository {
           or(
             like(notes.title, q),
             like(notes.content, q),
-            itemNoteIds.length > 0
-              ? sql`${notes.id} IN (${sql.join(itemNoteIds.map(id => sql`${id}`), sql`, `)})`
-              : sql`0`,
+            itemNoteIds.length > 0 ? inArray(notes.id, itemNoteIds) : sql`0`,
           ),
         ),
       )
@@ -135,7 +133,7 @@ export class DrizzleNoteRepository implements INoteRepository {
         and(
           isNull(notes.deletedAt),
           eq(notes.isArchived, false),
-          sql`${notes.id} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`,
+          inArray(notes.id, ids),
         ),
       )
       .orderBy(desc(notes.isPinned), desc(notes.updatedAt));
@@ -171,9 +169,16 @@ export class DrizzleNoteRepository implements INoteRepository {
 
   async update(id: number, input: UpdateNoteInput): Promise<Note> {
     const now = new Date();
+    // undefined フィールドをスプレッドすると Drizzle が NULL に上書きするケースを防ぐ
+    const patch: Record<string, unknown> = { updatedAt: now };
+    if (input.title   !== undefined) patch.title   = input.title;
+    if (input.content !== undefined) patch.content = input.content;
+    if (input.type    !== undefined) patch.type    = input.type;
+    if (input.color   !== undefined) patch.color   = input.color;
+
     await this.db
       .update(notes)
-      .set({ ...input, updatedAt: now })
+      .set(patch)
       .where(eq(notes.id, id));
 
     const note = await this.findById(id);
@@ -244,29 +249,30 @@ export class DrizzleNoteRepository implements INoteRepository {
   ): Promise<void> {
     const now = new Date();
 
-    // 既存アイテムを全て論理削除してから再挿入するシンプル方式
-    await this.db
-      .update(checklistItems)
-      .set({ deletedAt: now })
-      .where(and(eq(checklistItems.noteId, noteId), isNull(checklistItems.deletedAt)));
+    // トランザクションで atomic に実行（削除後の挿入失敗によるデータ消失を防ぐ）
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(checklistItems)
+        .set({ deletedAt: now })
+        .where(and(eq(checklistItems.noteId, noteId), isNull(checklistItems.deletedAt)));
 
-    if (items.length > 0) {
-      await this.db.insert(checklistItems).values(
-        items.map((item, i) => ({
-          noteId,
-          text:      item.text,
-          isChecked: item.isChecked,
-          position:  item.position ?? i * 1000,
-          createdAt: now,
-        })),
-      );
-    }
+      if (items.length > 0) {
+        await tx.insert(checklistItems).values(
+          items.map((item, i) => ({
+            noteId,
+            text:      item.text,
+            isChecked: item.isChecked,
+            position:  item.position ?? i * 1000,
+            createdAt: now,
+          })),
+        );
+      }
 
-    // note の updatedAt を更新
-    await this.db
-      .update(notes)
-      .set({ updatedAt: now })
-      .where(eq(notes.id, noteId));
+      await tx
+        .update(notes)
+        .set({ updatedAt: now })
+        .where(eq(notes.id, noteId));
+    });
   }
 
   async maxSortWeight(): Promise<number> {

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -25,7 +25,7 @@ export function SearchScreen() {
     return () => clearTimeout(t);
   }, []);
 
-  const openNote = (note: Note) => router.push(`/note/${note.id}`);
+  const openNote = useCallback((note: Note) => router.push(`/note/${note.id}`), [router]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
