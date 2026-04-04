@@ -5,24 +5,46 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { memoEZTheme } from '@/ui/theme/theme';
 import { initDatabase } from '@/data/db/client';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, Button } from 'react-native-paper';
+
+type DbState = 'loading' | 'ready' | 'error';
 
 export default function RootLayout() {
-  const [dbReady, setDbReady] = useState(false);
+  const [dbState, setDbState] = useState<DbState>('loading');
+  const [errMsg,  setErrMsg]  = useState('');
 
-  useEffect(() => {
+  const init = () => {
+    setDbState('loading');
     initDatabase()
-      .then(() => setDbReady(true))
-      .catch((e) => {
+      .then(() => setDbState('ready'))
+      .catch((e: unknown) => {
         console.error('DB init failed:', e);
-        setDbReady(true); // エラーでもUIは表示する
+        setErrMsg(e instanceof Error ? e.message : String(e));
+        setDbState('error');
       });
-  }, []);
+  };
 
-  if (!dbReady) {
+  useEffect(() => { init(); }, []);
+
+  if (dbState === 'loading') {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator />
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (dbState === 'error') {
+    return (
+      <View style={styles.center}>
+        <Text variant="titleMedium" style={styles.errTitle}>
+          データベースを開けませんでした
+        </Text>
+        <Text variant="bodySmall" style={styles.errDetail}>{errMsg}</Text>
+        <Button mode="contained" onPress={init} style={styles.retryBtn}>
+          再試行
+        </Button>
       </View>
     );
   }
@@ -36,3 +58,10 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  center:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  errTitle:  { marginBottom: 8, textAlign: 'center' },
+  errDetail: { color: '#888', textAlign: 'center', marginBottom: 24 },
+  retryBtn:  { minWidth: 120 },
+});

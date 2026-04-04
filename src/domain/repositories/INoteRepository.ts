@@ -21,8 +21,8 @@ export interface INoteRepository {
   findByLabel(labelId: number): Promise<Note[]>;
   create(input: CreateNoteInput): Promise<Note>;
   update(id: number, input: UpdateNoteInput): Promise<Note>;
+  /** ピン留め状態を反転する */
   togglePin(id: number): Promise<Note>;
-  _togglePin(id: number): Promise<Note>;
   toggleArchive(id: number): Promise<Note>;
   updateColor(id: number, color: NoteColor): Promise<Note>;
   /** 論理削除 */

@@ -51,9 +51,16 @@ export function LabelManagerScreen() {
 
   const commitEdit = async () => {
     if (!editingId || !editText.trim()) { setEditingId(null); return; }
-    await getLabelRepository().update(editingId, editText.trim());
+    const trimmed = editText.trim();
+    // 楽観的更新: DB成功前にUI先行更新
+    setLabels((ls) => ls.map((l) => l.id === editingId ? { ...l, name: trimmed } : l));
     setEditingId(null);
-    load();
+    try {
+      await getLabelRepository().update(editingId, trimmed);
+    } catch {
+      // 失敗時はリロードで真値に戻す
+      load();
+    }
   };
 
   const deleteLabel = (label: Label) => {
@@ -66,8 +73,13 @@ export function LabelManagerScreen() {
           text: '削除',
           style: 'destructive',
           onPress: async () => {
-            await getLabelRepository().delete(label.id);
-            load();
+            // 楽観的削除
+            setLabels((ls) => ls.filter((l) => l.id !== label.id));
+            try {
+              await getLabelRepository().delete(label.id);
+            } catch {
+              load();
+            }
           },
         },
       ],
@@ -77,10 +89,15 @@ export function LabelManagerScreen() {
   const createLabel = async () => {
     const name = newName.trim();
     if (!name) return;
-    await getLabelRepository().create(name);
     setNewName('');
     setShowNew(false);
-    load();
+    try {
+      const created = await getLabelRepository().create(name);
+      // 成功後に追加 (IDが必要なので楽観的追加ではなくリアル追加)
+      setLabels((ls) => [...ls, created].sort((a, b) => a.name.localeCompare(b.name)));
+    } catch {
+      load();
+    }
   };
 
   return (

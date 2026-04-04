@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { Text, Portal, Modal, Checkbox, Divider, Button } from 'react-native-paper';
+import { Text, Portal, Modal, Checkbox, Divider, Button, Snackbar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Label } from '@/domain/entities/Label';
 import { spacing } from '@/ui/theme/spacing';
@@ -11,35 +11,47 @@ interface Props {
   noteId:        number;
   currentLabels: Label[];
   onDismiss:     () => void;
-  onChanged:     () => void;  // ラベル変更後のコールバック
+  onChanged:     () => void;
 }
 
 export function LabelPickerSheet({
   visible, noteId, currentLabels, onDismiss, onChanged,
 }: Props) {
-  const [allLabels,  setAllLabels]  = useState<Label[]>([]);
-  const [selected,   setSelected]   = useState<Set<number>>(new Set());
-  const [newName,    setNewName]     = useState('');
-  const [creating,   setCreating]   = useState(false);
+  const [allLabels, setAllLabels] = useState<Label[]>([]);
+  const [selected,  setSelected]  = useState<Set<number>>(new Set());
+  const [newName,   setNewName]    = useState('');
+  const [creating,  setCreating]   = useState(false);
+  const [errMsg,    setErrMsg]     = useState('');
+
+  // currentLabels の ID 配列を文字列化してキャッシュキーとして使う
+  // → 親が同じラベルを毎回新しい配列で渡しても余計な再取得を防ぐ
+  const currentKey = currentLabels.map((l) => l.id).sort().join(',');
 
   useEffect(() => {
     if (!visible) return;
-    getLabelRepository().findAll().then((ls) => {
-      setAllLabels(ls);
-      setSelected(new Set(currentLabels.map((l) => l.id)));
-    });
-  }, [visible, currentLabels]);
+    getLabelRepository()
+      .findAll()
+      .then((ls) => {
+        setAllLabels(ls);
+        setSelected(new Set(currentLabels.map((l) => l.id)));
+      })
+      .catch(() => setErrMsg('ラベルを読み込めませんでした'));
+  }, [visible, currentKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async (labelId: number) => {
     const repo = getNoteRepository();
-    if (selected.has(labelId)) {
-      await repo.detachLabel(noteId, labelId);
-      setSelected((s) => { const n = new Set(s); n.delete(labelId); return n; });
-    } else {
-      await repo.attachLabel(noteId, labelId);
-      setSelected((s) => new Set([...s, labelId]));
+    try {
+      if (selected.has(labelId)) {
+        await repo.detachLabel(noteId, labelId);
+        setSelected((s) => { const n = new Set(s); n.delete(labelId); return n; });
+      } else {
+        await repo.attachLabel(noteId, labelId);
+        setSelected((s) => new Set([...s, labelId]));
+      }
+      onChanged();
+    } catch {
+      setErrMsg('ラベルの変更に失敗しました');
     }
-    onChanged();
   };
 
   const createLabel = async () => {
@@ -53,10 +65,16 @@ export function LabelPickerSheet({
       setSelected((s) => new Set([...s, label.id]));
       setNewName('');
       onChanged();
+    } catch {
+      setErrMsg('ラベルの作成に失敗しました');
     } finally {
       setCreating(false);
     }
   };
+
+  const filtered = allLabels.filter(
+    (l) => !newName.trim() || l.name.includes(newName.trim()),
+  );
 
   return (
     <Portal>
@@ -67,7 +85,6 @@ export function LabelPickerSheet({
       >
         <Text variant="titleSmall" style={styles.title}>ラベル</Text>
 
-        {/* 検索 / 新規作成入力 */}
         <View style={styles.inputRow}>
           <MaterialCommunityIcons name="label-outline" size={18} color="#888" />
           <TextInput
@@ -78,11 +95,7 @@ export function LabelPickerSheet({
             onChangeText={setNewName}
           />
           {newName.trim().length > 0 && (
-            <Button
-              compact
-              loading={creating}
-              onPress={createLabel}
-            >
+            <Button compact loading={creating} onPress={createLabel}>
               作成
             </Button>
           )}
@@ -90,11 +103,8 @@ export function LabelPickerSheet({
 
         <Divider style={{ marginVertical: spacing.sm }} />
 
-        {/* ラベル一覧 */}
         <FlatList
-          data={allLabels.filter((l) =>
-            !newName.trim() || l.name.includes(newName.trim()),
-          )}
+          data={filtered}
           keyExtractor={(item) => String(item.id)}
           style={{ maxHeight: 300 }}
           renderItem={({ item }) => (
@@ -116,6 +126,14 @@ export function LabelPickerSheet({
           }
         />
       </Modal>
+
+      <Snackbar
+        visible={!!errMsg}
+        onDismiss={() => setErrMsg('')}
+        duration={3000}
+      >
+        {errMsg}
+      </Snackbar>
     </Portal>
   );
 }
@@ -127,28 +145,27 @@ const styles = StyleSheet.create({
     borderRadius:    16,
     padding:         spacing.md,
   },
-  title: {
-    marginBottom: spacing.sm,
-  },
+  title:    { marginBottom: spacing.sm },
   inputRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.sm,
-    borderWidth:   1,
-    borderColor:   '#ddd',
-    borderRadius:  8,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.sm,
+    borderWidth:       1,
+    borderColor:       '#ddd',
+    borderRadius:      8,
     paddingHorizontal: spacing.sm,
   },
   input: {
-    flex:     1,
-    height:   44,
-    fontSize: 14,
-    color:    '#333',
+    flex:      1,
+    height:    44,
+    fontSize:  14,
+    color:     '#333',
   },
   row: {
-    flexDirection: 'row',
-    alignItems:    'center',
+    flexDirection:  'row',
+    alignItems:     'center',
     paddingVertical: 4,
+    minHeight:      44,
   },
   empty: {
     color:     '#aaa',

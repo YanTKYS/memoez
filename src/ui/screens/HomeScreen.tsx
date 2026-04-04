@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   FlatList,
@@ -22,7 +22,7 @@ export function HomeScreen() {
   const { width }    = useWindowDimensions();
   const layoutMode   = useSettingsStore((s) => s.layoutMode);
   const toggleLayout = useSettingsStore((s) => s.toggleLayout);
-  const { notes, loading, error, refresh } = useNotes();
+  const { notes, loading, error, refresh } = useNotes(false);
 
   // 画面フォーカス時にリロード (編集後に戻ってきたとき)
   useFocusEffect(
@@ -42,13 +42,13 @@ export function HomeScreen() {
     ? (width - spacing.md * 2 - colGap * (numCols - 1)) / numCols
     : undefined;
 
-  // ─── リストデータ ──────────────────────────────────────────────────────────
+  // ─── リストデータ (メモ化) ────────────────────────────────────────────────
   type SectionItem =
     | { kind: 'header'; label: string }
     | { kind: 'grid-row'; notes: Note[]; rowKey: string }
     | { kind: 'list-item'; note: Note };
 
-  const buildItems = (): SectionItem[] => {
+  const listItems = useMemo<SectionItem[]>(() => {
     const items: SectionItem[] = [];
 
     const pushNotes = (noteList: Note[], header: string) => {
@@ -56,10 +56,12 @@ export function HomeScreen() {
       items.push({ kind: 'header', label: header });
       if (isGrid) {
         for (let i = 0; i < noteList.length; i += numCols) {
+          const chunk = noteList.slice(i, i + numCols);
+          // ID ベースのキーで React の再利用ヒントを安定させる
           items.push({
-            kind:    'grid-row',
-            notes:   noteList.slice(i, i + numCols),
-            rowKey:  `row-${i}`,
+            kind:   'grid-row',
+            notes:  chunk,
+            rowKey: chunk.map((n) => n.id).join('-'),
           });
         }
       } else {
@@ -70,9 +72,7 @@ export function HomeScreen() {
     pushNotes(pinned,  'ピン留め');
     pushNotes(regular, 'メモ');
     return items;
-  };
-
-  const listItems = buildItems();
+  }, [pinned, regular, isGrid, numCols]);
 
   // ─── render ───────────────────────────────────────────────────────────────
   return (

@@ -13,7 +13,7 @@ interface Props {
   isGrid?:  boolean;
 }
 
-export function NoteCard({ note, onPress, isGrid = true }: Props) {
+export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = true }: Props) {
   const bgColor  = NOTE_COLOR_LIGHT[note.color];
   const maxLines = isGrid ? 5 : 2;
 
@@ -77,7 +77,7 @@ export function NoteCard({ note, onPress, isGrid = true }: Props) {
       )}
     </TouchableOpacity>
   );
-}
+}); // React.memo 終わり
 
 // ─── チェックリストプレビュー ───────────────────────────────────────────────
 

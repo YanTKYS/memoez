@@ -72,7 +72,7 @@ export const labels = sqliteTable(
   ],
 );
 
-// ─── note_labels (junction) ───────────────────────────────────────────────────
+// ─── note_labels (junction) ──────────────────────────────────────────────────
 
 export const noteLabels = sqliteTable(
   'note_labels',
@@ -85,3 +85,48 @@ export const noteLabels = sqliteTable(
     index('idx_note_labels_label_id').on(t.labelId),
   ],
 );
+
+// ─── Bootstrap DDL (client.ts から参照) ───────────────────────────────────────
+// テーブル定義の唯一の真実はここ。client.ts に SQL を書かない。
+export const BOOTSTRAP_SQL: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS notes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT    NOT NULL DEFAULT '',
+    content     TEXT    NOT NULL DEFAULT '',
+    type        TEXT    NOT NULL DEFAULT 'TEXT',
+    color       TEXT    NOT NULL DEFAULT 'NONE',
+    is_pinned   INTEGER NOT NULL DEFAULT 0,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    sort_weight REAL    NOT NULL DEFAULT 0,
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    deleted_at  INTEGER,
+    server_id   TEXT,
+    synced_at   INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS checklist_items (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id    INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    text       TEXT    NOT NULL DEFAULT '',
+    is_checked INTEGER NOT NULL DEFAULT 0,
+    position   INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    deleted_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS labels (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS note_labels (
+    note_id  INTEGER NOT NULL REFERENCES notes(id)  ON DELETE CASCADE,
+    label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+    PRIMARY KEY (note_id, label_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_updated_at  ON notes(updated_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_is_pinned   ON notes(is_pinned DESC, sort_weight DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_checklist_note_id ON checklist_items(note_id, position ASC)`,
+  `CREATE INDEX IF NOT EXISTS idx_note_labels_lid   ON note_labels(label_id)`,
+] as const;

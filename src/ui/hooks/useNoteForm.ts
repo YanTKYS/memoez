@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
 import type { Note, NoteType, NoteColor } from '@/domain/entities/Note';
-import type { ChecklistItem } from '@/domain/entities/ChecklistItem';
 import { isNoteEmpty } from '@/domain/entities/Note';
 
 export interface DraftChecklistItem {
@@ -53,10 +52,10 @@ const defaultForm = (): NoteFormState => ({
   checklistItems: [],
 });
 
-let _keyCounter = 0;
-function genKey() { return `new-${++_keyCounter}`; }
-
 export function useNoteForm(initialNote?: Note): UseNoteFormReturn {
+  const keyCounterRef = useRef(0);
+  const genKey = useCallback(() => `new-${++keyCounterRef.current}`, []);
+
   const [form, setForm] = useState<NoteFormState>(
     initialNote ? noteToForm(initialNote) : defaultForm(),
   );

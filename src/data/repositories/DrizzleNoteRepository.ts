@@ -158,6 +158,9 @@ export class DrizzleNoteRepository implements INoteRepository {
         sortWeight: maxWeight + 1000,
         createdAt:  now,
         updatedAt:  now,
+        // 将来の同期拡張ポイント:
+        // serverId: uuid() ← クライアント側でUUIDを生成しておくと
+        // オフライン作成 → 後でサーバーに push が容易になる
       })
       .returning();
 
@@ -179,10 +182,6 @@ export class DrizzleNoteRepository implements INoteRepository {
   }
 
   async togglePin(id: number): Promise<Note> {
-    return this._togglePin(id);
-  }
-
-  async _togglePin(id: number): Promise<Note> {
     const rows = await this.db.select().from(notes).where(eq(notes.id, id)).limit(1);
     const row = rows[0];
     if (!row) throw new Error(`Note ${id} not found`);
@@ -217,6 +216,9 @@ export class DrizzleNoteRepository implements INoteRepository {
       .update(notes)
       .set({ deletedAt: new Date() })
       .where(eq(notes.id, id));
+    // 将来の同期拡張ポイント:
+    // deletedAt が設定されたレコードは syncPendingChanges() で
+    // サーバーに DELETE リクエストを送信し、応答後に hardDelete() する
   }
 
   async hardDelete(id: number): Promise<void> {

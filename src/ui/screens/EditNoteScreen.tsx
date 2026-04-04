@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -37,11 +37,20 @@ export function EditNoteScreen({ noteId }: Props) {
   const router              = useRouter();
   const [note, setNote]     = useState<Note | null>(null);
   const [loadingNote, setLoadingNote] = useState(!!noteId);
-  const [saving, setSaving] = useState(false);
+  const [saving,     setSaving]  = useState(false);
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [snackMsg,   setSnackMsg]   = useState('');
+
+  // アンマウント後の state 更新を防ぐフラグ
+  const mountedRef   = useRef(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 保存中の二重実行防止
+  const savingRef    = useRef(false);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const {
     form,
@@ -56,22 +65,26 @@ export function EditNoteScreen({ noteId }: Props) {
     if (!noteId) return;
     getNoteRepository()
       .findById(noteId)
-      .then((n) => { setNote(n); setLoadingNote(false); })
-      .catch(() => { setLoadingNote(false); });
+      .then((n) => {
+        if (!mountedRef.current) return;
+        setNote(n);
+        setLoadingNote(false);
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setLoadingNote(false);
+      });
   }, [noteId]);
 
-  // ─── 自動保存 (debounce 1秒) ─────────────────────────────────────────────
-  useEffect(() => {
-    if (loadingNote) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => { saveNote(); }, 1000);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [form.title, form.content, form.type, form.color, form.checklistItems]); // eslint-disable-line
-
   // ─── 保存ロジック ────────────────────────────────────────────────────────
-  const saveNote = async (showFeedback = false) => {
-    if (isEmpty()) return;
-    setSaving(true);
+  // useCallback で form を deps に取り、常に最新の form を参照する
+  const saveNote = useCallback(async (): Promise<void> => {
+    if (savingRef.current) return;          // 二重保存防止
+    if (isEmpty())         return;          // 空メモは保存しない
+
+    savingRef.current = true;
+    if (mountedRef.current) setSaving(true);
+
     try {
       const repo  = getNoteRepository();
       const items = form.checklistItems
@@ -79,7 +92,6 @@ export function EditNoteScreen({ noteId }: Props) {
         .map((i, idx) => ({ text: i.text, isChecked: i.isChecked, position: idx * 1000 }));
 
       if (note) {
-        // 更新
         await repo.update(note.id, {
           title:   form.title,
           content: form.content,
@@ -90,29 +102,43 @@ export function EditNoteScreen({ noteId }: Props) {
           await repo.updateChecklistItems(note.id, items);
         }
       } else {
-        // 新規作成
         const created = await repo.create({
           title:   form.title,
           content: form.content,
           type:    form.type,
           color:   form.color,
         });
-        setNote(created);
+        if (mountedRef.current) setNote(created);
         if (form.type === 'CHECKLIST') {
           await repo.updateChecklistItems(created.id, items);
         }
       }
-      if (showFeedback) setSnackMsg('保存しました');
     } catch (e) {
-      console.error(e);
-      if (showFeedback) setSnackMsg('保存に失敗しました');
+      console.error('saveNote error:', e);
+      if (mountedRef.current) setSnackMsg('保存に失敗しました');
     } finally {
-      setSaving(false);
+      savingRef.current = false;
+      if (mountedRef.current) setSaving(false);
     }
-  };
+  }, [form, note, isEmpty]); // form が変わるたびに最新版を参照
+
+  // ─── 自動保存 (debounce 1秒) ─────────────────────────────────────────────
+  useEffect(() => {
+    if (loadingNote) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) saveNote();
+    }, 1000);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [loadingNote, saveNote]); // saveNote が deps に入るので form 変化も捕捉できる
 
   // ─── 戻る ────────────────────────────────────────────────────────────────
   const handleBack = async () => {
+    // debounce タイマーをキャンセルして即時保存
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!isEmpty()) await saveNote();
     router.back();
@@ -126,6 +152,7 @@ export function EditNoteScreen({ noteId }: Props) {
         text: '削除',
         style: 'destructive',
         onPress: async () => {
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           if (note) await getNoteRepository().delete(note.id);
           router.back();
         },
@@ -136,9 +163,8 @@ export function EditNoteScreen({ noteId }: Props) {
   // ─── ピン留めトグル ──────────────────────────────────────────────────────
   const handlePin = async () => {
     if (!note) return;
-    const repo    = getNoteRepository();
-    const updated = await repo._togglePin(note.id);
-    setNote(updated);
+    const updated = await getNoteRepository().togglePin(note.id);
+    if (mountedRef.current) setNote(updated);
   };
 
   const bgColor = NOTE_COLOR_LIGHT[form.color];
@@ -219,7 +245,11 @@ export function EditNoteScreen({ noteId }: Props) {
                     onRemove={() => removeChecklistItem(item.key)}
                   />
                 ))}
-              <TouchableOpacity style={styles.addItem} onPress={addChecklistItem}>
+              <TouchableOpacity
+                style={styles.addItem}
+                onPress={addChecklistItem}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <MaterialCommunityIcons name="plus" size={18} color="#888" />
                 <Text variant="bodyMedium" style={{ color: '#888' }}>アイテムを追加</Text>
               </TouchableOpacity>
@@ -251,19 +281,16 @@ export function EditNoteScreen({ noteId }: Props) {
 
         {/* BottomBar */}
         <View style={[styles.bottomBar, { backgroundColor: bgColor }]}>
-          {/* タイプ切替 */}
           <IconButton
             icon={form.type === 'TEXT' ? 'checkbox-marked-outline' : 'text'}
             size={22}
             onPress={() => setType(form.type === 'TEXT' ? 'CHECKLIST' : 'TEXT')}
           />
-          {/* 色変更 */}
           <IconButton
             icon="palette-outline"
             size={22}
             onPress={() => setShowColor(true)}
           />
-          {/* ラベル (既存ノートのみ) */}
           {note && (
             <IconButton
               icon="label-outline"
@@ -271,7 +298,6 @@ export function EditNoteScreen({ noteId }: Props) {
               onPress={() => setShowLabels(true)}
             />
           )}
-          {/* 更新時刻 */}
           {note && (
             <Text variant="labelSmall" style={styles.updatedAt}>
               {formatRelativeTime(note.updatedAt)}
@@ -297,12 +323,11 @@ export function EditNoteScreen({ noteId }: Props) {
           onDismiss={() => setShowLabels(false)}
           onChanged={async () => {
             const updated = await getNoteRepository().findById(note.id);
-            if (updated) setNote(updated);
+            if (updated && mountedRef.current) setNote(updated);
           }}
         />
       )}
 
-      {/* スナックバー */}
       <Snackbar
         visible={!!snackMsg}
         onDismiss={() => setSnackMsg('')}
@@ -317,17 +342,20 @@ export function EditNoteScreen({ noteId }: Props) {
 // ─── ChecklistRow ─────────────────────────────────────────────────────────────
 
 interface RowProps {
-  item:          { key: string; text: string; isChecked: boolean };
-  onChangeText:  (v: string) => void;
-  onToggle:      () => void;
-  onRemove:      () => void;
-  done?:         boolean;
+  item:         { key: string; text: string; isChecked: boolean };
+  onChangeText: (v: string) => void;
+  onToggle:     () => void;
+  onRemove:     () => void;
+  done?:        boolean;
 }
 
 function ChecklistRow({ item, onChangeText, onToggle, onRemove, done }: RowProps) {
   return (
     <View style={rowStyles.row}>
-      <TouchableOpacity onPress={onToggle} hitSlop={8}>
+      <TouchableOpacity
+        onPress={onToggle}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
         <MaterialCommunityIcons
           name={item.isChecked ? 'checkbox-marked-outline' : 'checkbox-blank-outline'}
           size={22}
@@ -342,7 +370,10 @@ function ChecklistRow({ item, onChangeText, onToggle, onRemove, done }: RowProps
         placeholderTextColor="#bbb"
         multiline={false}
       />
-      <TouchableOpacity onPress={onRemove} hitSlop={8}>
+      <TouchableOpacity
+        onPress={onRemove}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
         <MaterialCommunityIcons name="close" size={18} color="#bbb" />
       </TouchableOpacity>
     </View>
@@ -351,10 +382,11 @@ function ChecklistRow({ item, onChangeText, onToggle, onRemove, done }: RowProps
 
 const rowStyles = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.sm,
-    paddingVertical: 4,
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            spacing.sm,
+    paddingVertical: 6,
+    minHeight:      44, // Android タップターゲット最小値
   },
   input: {
     flex:     1,
@@ -367,8 +399,6 @@ const rowStyles = StyleSheet.create({
   },
 });
 
-// ─── styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: {
@@ -376,47 +406,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scroll: { flex: 1 },
+  scroll:        { flex: 1 },
   scrollContent: {
-    padding: spacing.md,
+    padding:       spacing.md,
     paddingBottom: 80,
   },
   titleInput: {
-    fontSize:    20,
-    fontWeight:  '600',
-    color:       '#1a1a1a',
+    fontSize:        20,
+    fontWeight:      '600',
+    color:           '#1a1a1a',
     paddingVertical: 4,
-    marginBottom: spacing.sm,
+    marginBottom:    spacing.sm,
+    minHeight:       44,
   },
   divider:      { marginVertical: spacing.sm },
   contentInput: {
-    fontSize:    15,
-    color:       '#333',
-    minHeight:   200,
-    lineHeight:  22,
+    fontSize:   15,
+    color:      '#333',
+    minHeight:  200,
+    lineHeight: 22,
   },
-  checklist:    { gap: 2 },
+  checklist: { gap: 2 },
   addItem: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.xs,
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            spacing.xs,
     paddingVertical: spacing.sm,
+    minHeight:       44,
   },
   doneLabel: {
-    color:     '#888',
+    color:        '#888',
     marginBottom: spacing.xs,
   },
   bottomBar: {
-    flexDirection: 'row',
-    alignItems:    'center',
+    flexDirection:     'row',
+    alignItems:        'center',
     paddingHorizontal: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    height: 52,
+    borderTopWidth:    1,
+    borderTopColor:    '#eee',
+    height:            52,
   },
   updatedAt: {
-    color:      '#aaa',
-    marginLeft: 'auto',
+    color:       '#aaa',
+    marginLeft:  'auto',
     marginRight: spacing.sm,
   },
 });
