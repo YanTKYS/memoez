@@ -17,14 +17,15 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Label } from '@/domain/entities/Label';
 import { getLabelRepository } from '@/lib/di';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { spacing } from '@/ui/theme/spacing';
 
 export function LabelManagerScreen() {
-  const router             = useRouter();
+  const router                     = useRouter();
+  const { bottom: safeBottom }     = useSafeAreaInsets();
   const [labels, setLabels]       = useState<Label[]>([]);
   const [loading, setLoading]     = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -176,7 +177,7 @@ export function LabelManagerScreen() {
 
       <FAB
         icon="plus"
-        style={styles.fab}
+        style={[styles.fab, { bottom: spacing.xl + safeBottom }]}
         onPress={() => setShowNew(true)}
       />
     </SafeAreaView>
@@ -220,6 +221,5 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right:    spacing.md,
-    bottom:   spacing.xl,
   },
 });

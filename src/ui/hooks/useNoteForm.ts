@@ -129,8 +129,7 @@ export function useNoteForm(): UseNoteFormReturn {
       isNoteEmpty({
         title:          form.title,
         content:        form.content,
-        // DraftChecklistItem は id 等を持たないが isNoteEmpty は length のみ参照
-        checklistItems: form.checklistItems.filter((i) => i.text.trim()) as any,
+        checklistItems: form.checklistItems.filter((i) => i.text.trim()),
       }),
     [form],
   );

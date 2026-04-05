@@ -19,6 +19,7 @@ import {
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { EmptyState } from '@/ui/components/common/EmptyState';
 import { NOTE_COLOR_LIGHT } from '@/ui/theme/colors';
 import { spacing } from '@/ui/theme/spacing';
 import { useEditNote } from '@/ui/hooks/useEditNote';
@@ -40,6 +41,7 @@ export function EditNoteScreen({ noteId }: Props) {
   const {
     note,
     loading,
+    loadError,
     saving,
     snackMsg,
     setSnackMsg,
@@ -85,6 +87,22 @@ export function EditNoteScreen({ noteId }: Props) {
       <View style={styles.center}>
         <ActivityIndicator />
       </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Appbar.Header elevated={false}>
+          <Appbar.BackAction onPress={handleBack} />
+        </Appbar.Header>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="読み込みエラー"
+          message={loadError}
+          action={{ label: '戻る', onPress: handleBack }}
+        />
+      </SafeAreaView>
     );
   }
 
@@ -229,7 +247,6 @@ export function EditNoteScreen({ noteId }: Props) {
       {note && (
         <LabelPickerSheet
           visible={showLabels}
-          noteId={note.id}
           currentLabels={note.labels}
           onDismiss={() => setShowLabels(false)}
           onFetchLabels={fetchLabels}

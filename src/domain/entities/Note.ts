@@ -21,8 +21,9 @@ export interface Note {
 }
 
 /** ビジネスルール: タイトル・本文・チェックリストが全て空か */
+// checklistItems は length のみ参照するため ChecklistItem 以外（DraftChecklistItem 等）も受け入れる
 export function isNoteEmpty(
-  note: Pick<Note, 'title' | 'content' | 'checklistItems'>,
+  note: Pick<Note, 'title' | 'content'> & { checklistItems: { length: number } },
 ): boolean {
   return (
     note.title.trim() === '' &&

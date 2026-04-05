@@ -7,7 +7,6 @@ import { spacing } from '@/ui/theme/spacing';
 
 interface Props {
   visible:        boolean;
-  noteId:         number;
   currentLabels:  Label[];
   onDismiss:      () => void;
   /** ラベル一覧を取得する（DB 操作は呼び出し元が担う） */

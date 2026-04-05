@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Appbar, FAB, Text, ActivityIndicator } from 'react-native-paper';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/ui/components/NoteCard';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { useNotes } from '@/ui/hooks/useNotes';
@@ -25,8 +25,9 @@ type SectionItem =
   | { kind: 'list-item'; note: Note };
 
 export function HomeScreen() {
-  const router       = useRouter();
-  const { width }    = useWindowDimensions();
+  const router           = useRouter();
+  const { width }        = useWindowDimensions();
+  const { bottom: safeBottom } = useSafeAreaInsets();
   const layoutMode   = useSettingsStore((s) => s.layoutMode);
   const toggleLayout = useSettingsStore((s) => s.toggleLayout);
   const { notes, loading, error, refresh } = useNotes(false);
@@ -157,7 +158,7 @@ export function HomeScreen() {
       <FAB
         icon="plus"
         label="メモ"
-        style={styles.fab}
+        style={[styles.fab, { bottom: spacing.xl + safeBottom }]}
         onPress={newNote}
       />
     </SafeAreaView>
@@ -175,5 +176,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   gridRow: { flexDirection: 'row', marginBottom: spacing.sm },
-  fab:     { position: 'absolute', right: spacing.md, bottom: spacing.xl },
+  fab:     { position: 'absolute', right: spacing.md },
 });

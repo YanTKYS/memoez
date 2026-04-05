@@ -9,10 +9,11 @@ import { useNoteForm } from './useNoteForm';
 export function useEditNote(noteId?: number) {
   const router = useRouter();
 
-  const [note,     setNote]     = useState<Note | null>(null);
-  const [loading,  setLoading]  = useState(!!noteId);
-  const [saving,   setSaving]   = useState(false);
-  const [snackMsg, setSnackMsg] = useState('');
+  const [note,      setNote]      = useState<Note | null>(null);
+  const [loading,   setLoading]   = useState(!!noteId);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving,    setSaving]    = useState(false);
+  const [snackMsg,  setSnackMsg]  = useState('');
 
   const mountedRef   = useRef(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -35,6 +36,7 @@ export function useEditNote(noteId?: number) {
       })
       .catch(() => {
         if (!mountedRef.current) return;
+        setLoadError('メモを読み込めませんでした');
         setLoading(false);
       });
   }, [noteId]); // resetForm は安定した useCallback なので deps 省略安全
@@ -54,14 +56,20 @@ export function useEditNote(noteId?: number) {
         .map((i, idx) => ({ text: i.text, isChecked: i.isChecked, position: idx * 1000 }));
 
       if (note) {
-        await repo.update(note.id, {
+        // ★ update() の戻り値で note state を更新 → updatedAt 表示がリアルタイムに変わる
+        const updated = await repo.update(note.id, {
           title:   form.title,
           content: form.content,
           type:    form.type,
           color:   form.color,
         });
+        if (mountedRef.current) setNote(updated);
+
         if (form.type === 'CHECKLIST') {
           await repo.updateChecklistItems(note.id, items);
+          // updateChecklistItems は notes.updatedAt も更新するので再取得
+          const refreshed = await repo.findById(note.id);
+          if (refreshed && mountedRef.current) setNote(refreshed);
         }
       } else {
         const created = await repo.create({
@@ -71,8 +79,12 @@ export function useEditNote(noteId?: number) {
           color:   form.color,
         });
         if (mountedRef.current) setNote(created);
+
         if (form.type === 'CHECKLIST') {
           await repo.updateChecklistItems(created.id, items);
+          // updateChecklistItems は notes.updatedAt も更新するので再取得
+          const refreshed = await repo.findById(created.id);
+          if (refreshed && mountedRef.current) setNote(refreshed);
         }
       }
     } catch (e) {
@@ -95,8 +107,6 @@ export function useEditNote(noteId?: number) {
   }, [loading, saveNote]);
 
   // ─── 保存して戻る（stableBack 経由で BackHandler に渡す） ────────────────
-  // handleBack は form が変わるたびに再生成されるが、handleBackRef で最新を保持し
-  // stableHandleBack は identity が変わらないため BackHandler の再登録が起きない
   const handleBack = useCallback(async () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!isEmpty()) await saveNote();
@@ -104,11 +114,11 @@ export function useEditNote(noteId?: number) {
   }, [isEmpty, saveNote, router]);
 
   const handleBackRef = useRef(handleBack);
-  handleBackRef.current = handleBack; // 毎レンダリングで最新を更新
+  handleBackRef.current = handleBack;
 
   const stableHandleBack = useCallback(() => {
     handleBackRef.current();
-  }, []); // 依存なし → 一切再生成されない
+  }, []);
 
   // ─── 削除 ────────────────────────────────────────────────────────────────
   const handleDelete = useCallback(() => {
@@ -141,23 +151,24 @@ export function useEditNote(noteId?: number) {
   }, [note]);
 
   // ─── ラベル操作（LabelPickerSheet に props として渡す） ─────────────────
-  // UI コンポーネントが Repository を直接知らなくて済む
   const fetchLabels = useCallback((): Promise<Label[]> =>
     getLabelRepository().findAll(), []);
 
   const toggleNoteLabel = useCallback(async (labelId: number, attached: boolean): Promise<void> => {
+    if (!note) return; // ★ non-null assertion を guard に変更
     const repo = getNoteRepository();
     if (attached) {
-      await repo.detachLabel(note!.id, labelId);
+      await repo.detachLabel(note.id, labelId);
     } else {
-      await repo.attachLabel(note!.id, labelId);
+      await repo.attachLabel(note.id, labelId);
     }
     await handleLabelChanged();
   }, [note, handleLabelChanged]);
 
   const createAndAttachLabel = useCallback(async (name: string): Promise<Label> => {
+    if (!note) throw new Error('note is not saved yet'); // ★ guard に変更
     const label = await getLabelRepository().create(name);
-    await getNoteRepository().attachLabel(note!.id, label.id);
+    await getNoteRepository().attachLabel(note.id, label.id);
     await handleLabelChanged();
     return label;
   }, [note, handleLabelChanged]);
@@ -174,16 +185,16 @@ export function useEditNote(noteId?: number) {
   return {
     note,
     loading,
+    loadError,
     saving,
     snackMsg,
     setSnackMsg,
     ...noteForm,
-    handleBack:          stableHandleBack, // Appbar & BackHandler どちらも stable 版を使う
+    handleBack:          stableHandleBack,
     handleDelete,
     handlePin,
     handleLabelChanged,
     prepareForLabels,
-    // ラベルピッカー用操作
     fetchLabels,
     toggleNoteLabel,
     createAndAttachLabel,
