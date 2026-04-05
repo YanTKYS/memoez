@@ -50,6 +50,7 @@ jobs:
             platform-tools
             platforms;android-35
             build-tools;35.0.0
+            ndk;26.1.10909125
 
       # ── Expo prebuild (managed → bare) ──────────────────────────────────
       # android/ は .gitignore に含まれるため毎回生成する
@@ -81,7 +82,7 @@ jobs:
 
       # ── ビルド ───────────────────────────────────────────────────────────
       - name: Build debug APK
-        run: cd android && ./gradlew assembleDebug --no-daemon
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Run Lint
         run: cd android && ./gradlew lintDebug --no-daemon
@@ -140,6 +141,7 @@ jobs:
             platform-tools
             platforms;android-35
             build-tools;35.0.0
+            ndk;26.1.10909125
 
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean --no-install
