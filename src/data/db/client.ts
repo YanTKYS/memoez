@@ -1,7 +1,9 @@
 import * as SQLite from 'expo-sqlite';
 import { drizzle } from 'drizzle-orm/expo-sqlite';
+import { isNull, eq } from 'drizzle-orm';
 import * as schema from './schema';
-import { BOOTSTRAP_SQL } from './schema';
+import { BOOTSTRAP_SQL, notes } from './schema';
+import { generateUUID } from '@/lib/uuid';
 
 const DB_NAME = 'memoez.db';
 
@@ -28,4 +30,21 @@ export async function initDatabase(): Promise<void> {
   }
 
   _db = drizzle(sqlite, { schema });
+
+  // 既存ノートに serverId が未設定のものがあれば一括生成（同期対応準備）
+  await migrateServerIds();
+}
+
+/** アップデート時に既存ノートへ serverId を付与する */
+async function migrateServerIds(): Promise<void> {
+  if (!_db) return;
+  const nullRows = await _db
+    .select({ id: notes.id })
+    .from(notes)
+    .where(isNull(notes.serverId));
+  for (const row of nullRows) {
+    await _db.update(notes)
+      .set({ serverId: generateUUID() })
+      .where(eq(notes.id, row.id));
+  }
 }

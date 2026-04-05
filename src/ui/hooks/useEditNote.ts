@@ -16,7 +16,7 @@ export function useEditNote(noteId?: number) {
   const [snackMsg,    setSnackMsg]    = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
-  const mountedRef   = useRef(true);
+  const mountedRef        = useRef(true);
   const saveTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedFeedbackRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef         = useRef(false);
@@ -56,13 +56,11 @@ export function useEditNote(noteId?: number) {
 
     try {
       const repo  = getNoteRepository();
-      const now   = new Date();
       const items = form.checklistItems
         .filter((i) => i.text.trim())
         .map((i, idx) => ({ text: i.text, isChecked: i.isChecked, position: idx * 1000 }));
 
       if (note) {
-        // ★ update() の戻り値で note state を更新 → updatedAt 表示がリアルタイムに変わる
         const updated = await repo.update(note.id, {
           title:   form.title,
           content: form.content,
@@ -72,10 +70,9 @@ export function useEditNote(noteId?: number) {
         if (mountedRef.current) setNote(updated);
 
         if (form.type === 'CHECKLIST') {
-          await repo.updateChecklistItems(note.id, items);
-          // updateChecklistItems は notes.updatedAt を now に更新するので
-          // findById を呼ばずクライアント側で updatedAt を反映
-          if (mountedRef.current) setNote((prev) => prev ? { ...prev, updatedAt: now } : prev);
+          // updateChecklistItems が Note を返すので直接 state に反映（DB往復1回節約）
+          const refreshed = await repo.updateChecklistItems(note.id, items);
+          if (mountedRef.current) setNote(refreshed);
         }
       } else {
         const created = await repo.create({
@@ -87,13 +84,14 @@ export function useEditNote(noteId?: number) {
         if (mountedRef.current) setNote(created);
 
         if (form.type === 'CHECKLIST') {
-          await repo.updateChecklistItems(created.id, items);
-          if (mountedRef.current) setNote((prev) => prev ? { ...prev, updatedAt: now } : prev);
+          const refreshed = await repo.updateChecklistItems(created.id, items);
+          if (mountedRef.current) setNote(refreshed);
         }
       }
 
       // 保存成功フィードバック（3秒後にクリア）
       if (mountedRef.current) {
+        const now = new Date();
         setLastSavedAt(now);
         if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
         savedFeedbackRef.current = setTimeout(() => {
@@ -156,35 +154,39 @@ export function useEditNote(noteId?: number) {
     if (mountedRef.current) setNote(updated);
   }, [note]);
 
-  // ─── ラベル変更後の反映 ──────────────────────────────────────────────────
-  const handleLabelChanged = useCallback(async () => {
-    if (!note) return;
-    const updated = await getNoteRepository().findById(note.id);
-    if (updated && mountedRef.current) setNote(updated);
-  }, [note]);
-
-  // ─── ラベル操作（LabelPickerSheet に props として渡す） ─────────────────
+  // ─── ラベル操作（楽観的更新 → findById 不要） ────────────────────────────
   const fetchLabels = useCallback((): Promise<Label[]> =>
     getLabelRepository().findAll(), []);
 
-  const toggleNoteLabel = useCallback(async (labelId: number, attached: boolean): Promise<void> => {
-    if (!note) return; // ★ non-null assertion を guard に変更
+  const toggleNoteLabel = useCallback(async (label: Label, attached: boolean): Promise<void> => {
+    if (!note) return;
+    const prevLabels = note.labels;
+    // 楽観的に UI を更新
+    const newLabels = attached
+      ? note.labels.filter(l => l.id !== label.id)
+      : [...note.labels, label];
+    if (mountedRef.current) setNote({ ...note, labels: newLabels });
     const repo = getNoteRepository();
-    if (attached) {
-      await repo.detachLabel(note.id, labelId);
-    } else {
-      await repo.attachLabel(note.id, labelId);
+    try {
+      if (attached) await repo.detachLabel(note.id, label.id);
+      else          await repo.attachLabel(note.id, label.id);
+    } catch (e) {
+      // DB失敗時ロールバック
+      if (mountedRef.current) setNote({ ...note, labels: prevLabels });
+      throw e; // LabelPickerSheet の errMsg 表示に伝播
     }
-    await handleLabelChanged();
-  }, [note, handleLabelChanged]);
+  }, [note]);
 
   const createAndAttachLabel = useCallback(async (name: string): Promise<Label> => {
-    if (!note) throw new Error('note is not saved yet'); // ★ guard に変更
+    if (!note) throw new Error('note is not saved yet');
     const label = await getLabelRepository().create(name);
     await getNoteRepository().attachLabel(note.id, label.id);
-    await handleLabelChanged();
+    // 楽観的に labels に追加
+    if (mountedRef.current) {
+      setNote(prev => prev ? { ...prev, labels: [...prev.labels, label] } : prev);
+    }
     return label;
-  }, [note, handleLabelChanged]);
+  }, [note]);
 
   // ─── 新規ノートの即時保存（ラベルシートを開く前に ID を確保する） ────────
   const prepareForLabels = useCallback(async (): Promise<boolean> => {
@@ -207,7 +209,6 @@ export function useEditNote(noteId?: number) {
     handleBack:          stableHandleBack,
     handleDelete,
     handlePin,
-    handleLabelChanged,
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,

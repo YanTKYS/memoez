@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   BackHandler,
+  Alert,
 } from 'react-native';
 import {
   Appbar,
@@ -65,14 +66,30 @@ export function EditNoteScreen({ noteId }: Props) {
   } = useEditNote(noteId);
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
-  // handleBack は stable (stableHandleBack) なので再登録されない
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (saving) return true; // 保存完了まで back を抑制
       handleBack();
       return true;
     });
     return () => sub.remove();
-  }, [handleBack]);
+  }, [handleBack, saving]);
+
+  // ─── タイプ切り替え（本文がある場合は確認） ──────────────────────────
+  const handleTypeChange = useCallback(() => {
+    if (form.type === 'TEXT' && form.content.trim()) {
+      Alert.alert(
+        'タイプを変更',
+        'チェックリストに変更すると入力中の本文は失われます。続けますか？',
+        [
+          { text: 'キャンセル', style: 'cancel' },
+          { text: '変更する', style: 'destructive', onPress: () => setType('CHECKLIST') },
+        ],
+      );
+    } else {
+      setType(form.type === 'TEXT' ? 'CHECKLIST' : 'TEXT');
+    }
+  }, [form.type, form.content, setType]);
 
   // ─── ラベルボタン ─────────────────────────────────────────────────────
   const handleLabelPress = useCallback(async () => {
@@ -181,7 +198,7 @@ export function EditNoteScreen({ noteId }: Props) {
           <IconButton
             icon={form.type === 'TEXT' ? 'checkbox-marked-outline' : 'text'}
             size={22}
-            onPress={() => setType(form.type === 'TEXT' ? 'CHECKLIST' : 'TEXT')}
+            onPress={handleTypeChange}
           />
           <IconButton
             icon="palette-outline"

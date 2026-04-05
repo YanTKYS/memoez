@@ -31,9 +31,17 @@ export interface INoteRepository {
   hardDelete(id: number): Promise<void>;
   attachLabel(noteId: number, labelId: number): Promise<void>;
   detachLabel(noteId: number, labelId: number): Promise<void>;
+  /** チェックリストアイテムを更新し、最新の Note を返す */
   updateChecklistItems(
     noteId: number,
     items: Array<{ id?: number; text: string; isChecked: boolean; position: number }>,
-  ): Promise<void>;
+  ): Promise<Note>;
   maxSortWeight(): Promise<number>;
+
+  // ── 将来の同期拡張ポイント ────────────────────────────────────────────────
+  // /** updatedAt > syncedAt のノートを取得（同期待ち） */
+  // findSyncPending(): Promise<Note[]>;
+  // /** サーバー同期完了を記録 */
+  // markSynced(id: number): Promise<void>;
 }
+

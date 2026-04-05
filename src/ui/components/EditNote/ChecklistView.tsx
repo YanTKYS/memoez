@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useRef, useEffect } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { Text, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -31,7 +31,7 @@ export const ChecklistView = memo(function ChecklistView({
           onChangeText={onUpdate}
           onToggle={onToggle}
           onRemove={onRemove}
-          autoFocus={item.key === lastAddedKey}
+          shouldFocus={item.key === lastAddedKey}
         />
       ))}
 
@@ -78,12 +78,23 @@ interface RowProps {
   onToggle:     (key: string) => void;
   onRemove:     (key: string) => void;
   done?:        boolean;
-  autoFocus?:   boolean;
+  /** true のとき、マウント後に TextInput へフォーカスを移す */
+  shouldFocus?: boolean;
 }
 
 const ChecklistRow = memo(function ChecklistRow({
-  itemKey, text, isChecked, onChangeText, onToggle, onRemove, done, autoFocus,
+  itemKey, text, isChecked, onChangeText, onToggle, onRemove, done, shouldFocus,
 }: RowProps) {
+  const inputRef = useRef<TextInput>(null);
+
+  // autoFocus prop はリスト更新タイミングで発火しない場合があるため
+  // useEffect + ref で明示的にフォーカスする
+  useEffect(() => {
+    if (!shouldFocus) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [shouldFocus]);
+
   return (
     <View style={rowStyles.row}>
       <TouchableOpacity
@@ -97,13 +108,13 @@ const ChecklistRow = memo(function ChecklistRow({
         />
       </TouchableOpacity>
       <TextInput
+        ref={inputRef}
         style={[rowStyles.input, done && rowStyles.done]}
         value={text}
         onChangeText={(t) => onChangeText(itemKey, t)}
         placeholder="アイテム"
         placeholderTextColor="#bbb"
         multiline={false}
-        autoFocus={autoFocus}
       />
       <TouchableOpacity
         onPress={() => onRemove(itemKey)}

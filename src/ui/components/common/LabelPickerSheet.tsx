@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { Text, Portal, Modal, Checkbox, Divider, Button, Snackbar } from 'react-native-paper';
+import { Text, Portal, Modal, Checkbox, Divider, Button, Snackbar, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Label } from '@/domain/entities/Label';
 import { spacing } from '@/ui/theme/spacing';
@@ -11,8 +11,8 @@ interface Props {
   onDismiss:      () => void;
   /** ラベル一覧を取得する（DB 操作は呼び出し元が担う） */
   onFetchLabels:  () => Promise<Label[]>;
-  /** ラベルのアタッチ/デタッチを切り替える */
-  onToggleLabel:  (labelId: number, currentlyAttached: boolean) => Promise<void>;
+  /** ラベルのアタッチ/デタッチを切り替える（呼び出し元で楽観的更新済み） */
+  onToggleLabel:  (label: Label, currentlyAttached: boolean) => Promise<void>;
   /** 新規ラベルを作成してアタッチする */
   onCreateLabel:  (name: string) => Promise<Label>;
 }
@@ -21,6 +21,7 @@ export function LabelPickerSheet({
   visible, currentLabels, onDismiss,
   onFetchLabels, onToggleLabel, onCreateLabel,
 }: Props) {
+  const theme = useTheme();
   const [allLabels,  setAllLabels]  = useState<Label[]>([]);
   const [selected,   setSelected]   = useState<Set<number>>(new Set());
   const [newName,    setNewName]     = useState('');
@@ -28,9 +29,8 @@ export function LabelPickerSheet({
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [errMsg,     setErrMsg]     = useState('');
 
-  // currentLabels の ID 配列を文字列化してキャッシュキーとして使う
-  const currentKey = currentLabels.map((l) => l.id).sort().join(',');
-
+  // シート表示時のみラベル一覧を取得。開いている間の currentLabels 変更は
+  // selected / allLabels をローカルで管理するため再取得しない。
   useEffect(() => {
     if (!visible) return;
     onFetchLabels()
@@ -39,18 +39,18 @@ export function LabelPickerSheet({
         setSelected(new Set(currentLabels.map((l) => l.id)));
       })
       .catch(() => setErrMsg('ラベルを読み込めませんでした'));
-  }, [visible, currentKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── ラベル ON/OFF ────────────────────────────────────────────────────────
-  const toggle = async (labelId: number) => {
+  const toggle = async (item: Label) => {
     if (togglingId !== null) return; // 連打ガード
-    setTogglingId(labelId);
-    const attached = selected.has(labelId);
+    setTogglingId(item.id);
+    const attached = selected.has(item.id);
     try {
-      await onToggleLabel(labelId, attached);
+      await onToggleLabel(item, attached);
       setSelected((s) => {
         const next = new Set(s);
-        attached ? next.delete(labelId) : next.add(labelId);
+        attached ? next.delete(item.id) : next.add(item.id);
         return next;
       });
     } catch {
@@ -86,17 +86,19 @@ export function LabelPickerSheet({
       <Modal
         visible={visible}
         onDismiss={onDismiss}
-        onRequestClose={onDismiss}
-        contentContainerStyle={styles.modal}
+        contentContainerStyle={[
+          styles.modal,
+          { backgroundColor: theme.colors.surface },
+        ]}
       >
         <Text variant="titleSmall" style={styles.title}>ラベル</Text>
 
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow, { borderColor: theme.colors.outline }]}>
           <MaterialCommunityIcons name="label-outline" size={18} color="#888" />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.colors.onSurface }]}
             placeholder="ラベルを検索または作成"
-            placeholderTextColor="#aaa"
+            placeholderTextColor={theme.colors.onSurfaceDisabled}
             value={newName}
             onChangeText={setNewName}
           />
@@ -118,12 +120,12 @@ export function LabelPickerSheet({
             return (
               <TouchableOpacity
                 style={[styles.row, isToggling && styles.rowDisabled]}
-                onPress={() => toggle(item.id)}
+                onPress={() => toggle(item)}
                 disabled={togglingId !== null}
               >
                 <Checkbox
                   status={selected.has(item.id) ? 'checked' : 'unchecked'}
-                  onPress={() => toggle(item.id)}
+                  onPress={() => toggle(item)}
                   disabled={togglingId !== null}
                 />
                 <Text variant="bodyMedium">{item.name}</Text>
@@ -151,10 +153,9 @@ export function LabelPickerSheet({
 
 const styles = StyleSheet.create({
   modal: {
-    backgroundColor: '#fff',
-    margin:          spacing.xl,
-    borderRadius:    16,
-    padding:         spacing.md,
+    margin:       spacing.xl,
+    borderRadius: 16,
+    padding:      spacing.md,
   },
   title:    { marginBottom: spacing.sm },
   inputRow: {
@@ -162,15 +163,13 @@ const styles = StyleSheet.create({
     alignItems:        'center',
     gap:               spacing.sm,
     borderWidth:       1,
-    borderColor:       '#ddd',
     borderRadius:      8,
     paddingHorizontal: spacing.sm,
   },
   input: {
-    flex:      1,
-    height:    44,
-    fontSize:  14,
-    color:     '#333',
+    flex:     1,
+    height:   44,
+    fontSize: 14,
   },
   row: {
     flexDirection:   'row',

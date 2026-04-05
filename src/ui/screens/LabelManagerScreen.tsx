@@ -181,7 +181,11 @@ export function LabelManagerScreen() {
       <FAB
         icon="plus"
         style={[styles.fab, { bottom: spacing.xl + safeBottom }]}
-        onPress={() => setShowNew(true)}
+        onPress={() => {
+          // 編集中の場合は先にコミット
+          if (editingId !== null) commitEdit();
+          setShowNew(true);
+        }}
       />
 
       <Snackbar

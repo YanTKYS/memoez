@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -6,7 +6,7 @@ import {
   TextInput as RNTextInput,
 } from 'react-native';
 import { Appbar, Text, ActivityIndicator } from 'react-native-paper';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NoteCard } from '@/ui/components/NoteCard';
 import { EmptyState } from '@/ui/components/common/EmptyState';
@@ -19,11 +19,12 @@ export function SearchScreen() {
   const inputRef        = useRef<RNTextInput>(null);
   const { query, setQuery, results, loading } = useSearch();
 
-  useEffect(() => {
-    // 画面表示後にフォーカス
-    const t = setTimeout(() => inputRef.current?.focus(), 100);
-    return () => clearTimeout(t);
-  }, []);
+  // 画面フォーカス時にキーボードを表示（setTimeout より確実）
+  useFocusEffect(
+    useCallback(() => {
+      inputRef.current?.focus();
+    }, []),
+  );
 
   const openNote = useCallback((note: Note) => router.push(`/note/${note.id}`), [router]);
 
@@ -67,6 +68,7 @@ export function SearchScreen() {
         />
       ) : (
         <FlatList
+          key={query}
           data={results}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}

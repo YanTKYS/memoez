@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Text, Portal, Modal } from 'react-native-paper';
+import { Text, Portal, Modal, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NoteColor } from '@/domain/entities/Note';
 import { NOTE_COLOR_LIGHT, NOTE_COLOR_ORDER, NOTE_COLOR_LABEL } from '@/ui/theme/colors';
@@ -14,12 +14,13 @@ interface Props {
 }
 
 export function ColorPicker({ visible, current, onSelect, onDismiss }: Props) {
+  const theme = useTheme();
   return (
     <Portal>
       <Modal
         visible={visible}
         onDismiss={onDismiss}
-        contentContainerStyle={styles.modal}
+        contentContainerStyle={[styles.modal, { backgroundColor: theme.colors.surface }]}
       >
         <Text variant="titleSmall" style={styles.title}>色を選択</Text>
         <View style={styles.palette}>
@@ -43,10 +44,9 @@ export function ColorPicker({ visible, current, onSelect, onDismiss }: Props) {
 
 const styles = StyleSheet.create({
   modal: {
-    backgroundColor: '#fff',
-    margin:          spacing.xl,
-    borderRadius:    16,
-    padding:         spacing.md,
+    margin:       spacing.xl,
+    borderRadius: 16,
+    padding:      spacing.md,
   },
   title: {
     marginBottom: spacing.md,

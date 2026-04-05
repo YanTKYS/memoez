@@ -5,17 +5,9 @@ import { notes, checklistItems, noteLabels, labels } from '../db/schema';
 import type { INoteRepository, CreateNoteInput, UpdateNoteInput } from '@/domain/repositories/INoteRepository';
 import type { Note, NoteColor } from '@/domain/entities/Note';
 import { toNote, toLabel, toChecklistItem } from '../mappers/noteMapper';
+import { generateUUID } from '@/lib/uuid';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
-
-/** UUID v4 生成（同期対応準備用） */
-function generateServerId(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 export class DrizzleNoteRepository implements INoteRepository {
   constructor(private readonly db: DB) {}
@@ -165,7 +157,7 @@ export class DrizzleNoteRepository implements INoteRepository {
         sortWeight: maxWeight + 1000,
         createdAt:  now,
         updatedAt:  now,
-        serverId:   generateServerId(), // オフライン作成 → 後でサーバーに push する際の識別子
+        serverId:   generateUUID(), // オフライン作成 → 後でサーバーに push する際の識別子
       })
       .returning();
 
@@ -253,7 +245,7 @@ export class DrizzleNoteRepository implements INoteRepository {
   async updateChecklistItems(
     noteId: number,
     items: Array<{ id?: number; text: string; isChecked: boolean; position: number }>,
-  ): Promise<void> {
+  ): Promise<Note> {
     const now = new Date();
 
     // トランザクションで atomic に実行（削除後の挿入失敗によるデータ消失を防ぐ）
@@ -280,6 +272,11 @@ export class DrizzleNoteRepository implements INoteRepository {
         .set({ updatedAt: now })
         .where(eq(notes.id, noteId));
     });
+
+    const rows = await this.db.select().from(notes).where(eq(notes.id, noteId)).limit(1);
+    if (!rows[0]) throw new Error(`Note ${noteId} not found after updateChecklistItems`);
+    const hydrated = await this.hydrateNotes(rows);
+    return hydrated[0]!;
   }
 
   async maxSortWeight(): Promise<number> {
