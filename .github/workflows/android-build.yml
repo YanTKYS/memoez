@@ -92,10 +92,20 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       # ── ビルド ───────────────────────────────────────────────────────────
-      # --info: Kotlin compiler errors are logged at INFO level;
-      #         without it the real error is never visible in CI.
+      # --info の全出力はファイルに退避し、失敗時だけエラー行を表示する。
+      # これにより CI ログが 2 万行になるのを防ぐ。
       - name: Build debug APK
-        run: cd android && ./gradlew assembleDebug --no-daemon --info
+        shell: bash
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
+            echo "===== BUILD FAILED: Kotlin / compiler errors ====="
+            grep -E "^e: |error:|ERROR|FAILED|Caused by:|Cannot find|unresolved|Exception" \
+              /tmp/gradle-debug.log | head -150
+            echo "===== last 30 lines ====="
+            tail -30 /tmp/gradle-debug.log
+            exit 1
+          }
 
       - name: Run Lint
         run: cd android && ./gradlew lintDebug --no-daemon
@@ -188,7 +198,17 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Build release APK (unsigned)
-        run: cd android && ./gradlew assembleRelease --no-daemon --info
+        shell: bash
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
+            echo "===== BUILD FAILED: Kotlin / compiler errors ====="
+            grep -E "^e: |error:|ERROR|FAILED|Caused by:|Cannot find|unresolved|Exception" \
+              /tmp/gradle-release.log | head -150
+            echo "===== last 30 lines ====="
+            tail -30 /tmp/gradle-release.log
+            exit 1
+          }
 
       # R8/ProGuard の missing_rules があれば保存
       - name: Upload R8 missing rules
