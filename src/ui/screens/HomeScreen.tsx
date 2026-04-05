@@ -5,6 +5,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   RefreshControl,
+  ListRenderItem,
 } from 'react-native';
 import { Appbar, FAB, Text, ActivityIndicator } from 'react-native-paper';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -15,6 +16,13 @@ import { useNotes } from '@/ui/hooks/useNotes';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { Note } from '@/domain/entities/Note';
 import { spacing } from '@/ui/theme/spacing';
+
+// ─── 型定義（コンポーネント外に置くことで useCallback の deps 解決が安定する） ──
+
+type SectionItem =
+  | { kind: 'header';    label: string }
+  | { kind: 'grid-row';  notes: Note[]; rowKey: string }
+  | { kind: 'list-item'; note: Note };
 
 export function HomeScreen() {
   const router       = useRouter();
@@ -27,25 +35,18 @@ export function HomeScreen() {
     useCallback(() => { refresh(); }, [refresh]),
   );
 
-  // ★ useMemo で安定した参照を確保 → listItems の useMemo が正しく動く
-  const pinned = useMemo(() => notes.filter((n) => n.isPinned),  [notes]);
+  const pinned  = useMemo(() => notes.filter((n) => n.isPinned),  [notes]);
   const regular = useMemo(() => notes.filter((n) => !n.isPinned), [notes]);
 
-  // ★ useCallback で安定した関数参照 → NoteCard の React.memo が正しく機能する
   const openNote = useCallback((note: Note) => router.push(`/note/${note.id}`), [router]);
   const newNote  = useCallback(() => router.push('/note/new'), [router]);
 
-  const isGrid   = layoutMode === 'grid';
-  const numCols  = isGrid ? (width >= 600 ? 3 : 2) : 1;
-  const colGap   = spacing.sm;
+  const isGrid    = layoutMode === 'grid';
+  const numCols   = isGrid ? (width >= 600 ? 3 : 2) : 1;
+  const colGap    = spacing.sm;
   const cardWidth = isGrid
     ? (width - spacing.md * 2 - colGap * (numCols - 1)) / numCols
     : undefined;
-
-  type SectionItem =
-    | { kind: 'header';   label: string }
-    | { kind: 'grid-row'; notes: Note[]; rowKey: string }
-    | { kind: 'list-item'; note: Note };
 
   const listItems = useMemo<SectionItem[]>(() => {
     const items: SectionItem[] = [];
@@ -71,6 +72,40 @@ export function HomeScreen() {
     pushNotes(regular, 'メモ');
     return items;
   }, [pinned, regular, isGrid, numCols]);
+
+  // renderItem を useCallback で安定させる → FlatList の不要な全件再レンダリングを防ぐ
+  const renderItem = useCallback<ListRenderItem<SectionItem>>(({ item }) => {
+    if (item.kind === 'header') {
+      return (
+        <Text variant="labelSmall" style={styles.sectionHeader}>
+          {item.label}
+        </Text>
+      );
+    }
+    if (item.kind === 'grid-row') {
+      return (
+        <View style={[styles.gridRow, { gap: colGap }]}>
+          {item.notes.map((note) => (
+            <View key={note.id} style={{ width: cardWidth }}>
+              <NoteCard note={note} onPress={openNote} isGrid />
+            </View>
+          ))}
+          {Array.from({ length: numCols - item.notes.length }).map((_, i) => (
+            <View key={`empty-${i}`} style={{ width: cardWidth }} />
+          ))}
+        </View>
+      );
+    }
+    return (
+      <NoteCard note={item.note} onPress={openNote} isGrid={false} />
+    );
+  }, [colGap, cardWidth, numCols, openNote]);
+
+  const keyExtractor = useCallback((item: SectionItem) => {
+    if (item.kind === 'header')   return `header-${item.label}`;
+    if (item.kind === 'grid-row') return item.rowKey;
+    return `note-${item.note.id}`;
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -99,6 +134,7 @@ export function HomeScreen() {
           icon="alert-circle-outline"
           title="読み込みエラー"
           message={error}
+          action={{ label: 'リトライ', onPress: refresh }}
         />
       ) : notes.length === 0 ? (
         <EmptyState
@@ -109,46 +145,12 @@ export function HomeScreen() {
       ) : (
         <FlatList
           data={listItems}
-          keyExtractor={(item) => {
-            if (item.kind === 'header')   return `header-${item.label}`;
-            if (item.kind === 'grid-row') return item.rowKey;
-            return `note-${item.note.id}`;
-          }}
+          keyExtractor={keyExtractor}
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={refresh} />
           }
-          renderItem={({ item }) => {
-            if (item.kind === 'header') {
-              return (
-                <Text variant="labelSmall" style={styles.sectionHeader}>
-                  {item.label}
-                </Text>
-              );
-            }
-            if (item.kind === 'grid-row') {
-              return (
-                <View style={[styles.gridRow, { gap: colGap }]}>
-                  {item.notes.map((note) => (
-                    <View key={note.id} style={{ width: cardWidth }}>
-                      {/* ★ openNote は stable → NoteCard の React.memo が有効 */}
-                      <NoteCard note={note} onPress={openNote} isGrid />
-                    </View>
-                  ))}
-                  {Array.from({ length: numCols - item.notes.length }).map((_, i) => (
-                    <View key={`empty-${i}`} style={{ width: cardWidth }} />
-                  ))}
-                </View>
-              );
-            }
-            return (
-              <NoteCard
-                note={item.note}
-                onPress={openNote}
-                isGrid={false}
-              />
-            );
-          }}
+          renderItem={renderItem}
         />
       )}
 

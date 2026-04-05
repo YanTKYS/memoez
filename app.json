@@ -19,7 +19,8 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
-      "package": "com.memoez.app"
+      "package": "com.memoez.app",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "plugins": [
       "expo-router",

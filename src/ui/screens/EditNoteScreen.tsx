@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
   View,
   ScrollView,
@@ -34,6 +34,9 @@ export function EditNoteScreen({ noteId }: Props) {
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
 
+  // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
+  const contentInputRef = useRef<TextInput>(null);
+
   const {
     note,
     loading,
@@ -50,14 +53,17 @@ export function EditNoteScreen({ noteId }: Props) {
     toggleChecklistItem,
     removeChecklistItem,
     lastAddedKey,
-    handleBack,
+    handleBack,       // stableHandleBack が返ってくる（再生成されない）
     handleDelete,
     handlePin,
-    handleLabelChanged,
     prepareForLabels,
+    fetchLabels,
+    toggleNoteLabel,
+    createAndAttachLabel,
   } = useEditNote(noteId);
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
+  // handleBack は stable (stableHandleBack) なので再登録されない
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       handleBack();
@@ -84,9 +90,14 @@ export function EditNoteScreen({ noteId }: Props) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top', 'bottom']}>
+      {/*
+        Android: behavior を指定しない（undefined）ことで高さが縮まらず自然なスクロール動作になる。
+        softwareKeyboardLayoutMode: "pan" を app.json に設定済み。
+        iOS: 'padding' で入力欄がキーボード上に浮く。
+      */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <Appbar.Header style={{ backgroundColor: bgColor }} elevated={false}>
           <Appbar.BackAction onPress={handleBack} />
@@ -114,12 +125,15 @@ export function EditNoteScreen({ noteId }: Props) {
             onChangeText={setTitle}
             multiline={false}
             returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => contentInputRef.current?.focus()}
           />
 
           <Divider style={styles.divider} />
 
           {form.type === 'TEXT' && (
             <TextInput
+              ref={contentInputRef}
               style={styles.contentInput}
               placeholder="メモを入力..."
               placeholderTextColor="#aaa"
@@ -218,7 +232,9 @@ export function EditNoteScreen({ noteId }: Props) {
           noteId={note.id}
           currentLabels={note.labels}
           onDismiss={() => setShowLabels(false)}
-          onChanged={handleLabelChanged}
+          onFetchLabels={fetchLabels}
+          onToggleLabel={toggleNoteLabel}
+          onCreateLabel={createAndAttachLabel}
         />
       )}
 

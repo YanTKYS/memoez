@@ -4,33 +4,37 @@ import { Text, Portal, Modal, Checkbox, Divider, Button, Snackbar } from 'react-
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Label } from '@/domain/entities/Label';
 import { spacing } from '@/ui/theme/spacing';
-import { getLabelRepository, getNoteRepository } from '@/lib/di';
 
 interface Props {
-  visible:       boolean;
-  noteId:        number;
-  currentLabels: Label[];
-  onDismiss:     () => void;
-  onChanged:     () => void;
+  visible:        boolean;
+  noteId:         number;
+  currentLabels:  Label[];
+  onDismiss:      () => void;
+  /** ラベル一覧を取得する（DB 操作は呼び出し元が担う） */
+  onFetchLabels:  () => Promise<Label[]>;
+  /** ラベルのアタッチ/デタッチを切り替える */
+  onToggleLabel:  (labelId: number, currentlyAttached: boolean) => Promise<void>;
+  /** 新規ラベルを作成してアタッチする */
+  onCreateLabel:  (name: string) => Promise<Label>;
 }
 
 export function LabelPickerSheet({
-  visible, noteId, currentLabels, onDismiss, onChanged,
+  visible, currentLabels, onDismiss,
+  onFetchLabels, onToggleLabel, onCreateLabel,
 }: Props) {
-  const [allLabels, setAllLabels] = useState<Label[]>([]);
-  const [selected,  setSelected]  = useState<Set<number>>(new Set());
-  const [newName,   setNewName]    = useState('');
-  const [creating,  setCreating]   = useState(false);
-  const [errMsg,    setErrMsg]     = useState('');
+  const [allLabels,  setAllLabels]  = useState<Label[]>([]);
+  const [selected,   setSelected]   = useState<Set<number>>(new Set());
+  const [newName,    setNewName]     = useState('');
+  const [creating,   setCreating]   = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [errMsg,     setErrMsg]     = useState('');
 
   // currentLabels の ID 配列を文字列化してキャッシュキーとして使う
-  // → 親が同じラベルを毎回新しい配列で渡しても余計な再取得を防ぐ
   const currentKey = currentLabels.map((l) => l.id).sort().join(',');
 
   useEffect(() => {
     if (!visible) return;
-    getLabelRepository()
-      .findAll()
+    onFetchLabels()
       .then((ls) => {
         setAllLabels(ls);
         setSelected(new Set(currentLabels.map((l) => l.id)));
@@ -38,33 +42,35 @@ export function LabelPickerSheet({
       .catch(() => setErrMsg('ラベルを読み込めませんでした'));
   }, [visible, currentKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── ラベル ON/OFF ────────────────────────────────────────────────────────
   const toggle = async (labelId: number) => {
-    const repo = getNoteRepository();
+    if (togglingId !== null) return; // 連打ガード
+    setTogglingId(labelId);
+    const attached = selected.has(labelId);
     try {
-      if (selected.has(labelId)) {
-        await repo.detachLabel(noteId, labelId);
-        setSelected((s) => { const n = new Set(s); n.delete(labelId); return n; });
-      } else {
-        await repo.attachLabel(noteId, labelId);
-        setSelected((s) => new Set([...s, labelId]));
-      }
-      onChanged();
+      await onToggleLabel(labelId, attached);
+      setSelected((s) => {
+        const next = new Set(s);
+        attached ? next.delete(labelId) : next.add(labelId);
+        return next;
+      });
     } catch {
       setErrMsg('ラベルの変更に失敗しました');
+    } finally {
+      setTogglingId(null);
     }
   };
 
+  // ─── 新規ラベル作成 ───────────────────────────────────────────────────────
   const createLabel = async () => {
     const name = newName.trim();
     if (!name) return;
     setCreating(true);
     try {
-      const label = await getLabelRepository().create(name);
-      await getNoteRepository().attachLabel(noteId, label.id);
+      const label = await onCreateLabel(name);
       setAllLabels((ls) => [...ls, label]);
       setSelected((s) => new Set([...s, label.id]));
       setNewName('');
-      onChanged();
     } catch {
       setErrMsg('ラベルの作成に失敗しました');
     } finally {
@@ -108,18 +114,23 @@ export function LabelPickerSheet({
           data={filtered}
           keyExtractor={(item) => String(item.id)}
           style={{ maxHeight: 300 }}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.row}
-              onPress={() => toggle(item.id)}
-            >
-              <Checkbox
-                status={selected.has(item.id) ? 'checked' : 'unchecked'}
+          renderItem={({ item }) => {
+            const isToggling = togglingId === item.id;
+            return (
+              <TouchableOpacity
+                style={[styles.row, isToggling && styles.rowDisabled]}
                 onPress={() => toggle(item.id)}
-              />
-              <Text variant="bodyMedium">{item.name}</Text>
-            </TouchableOpacity>
-          )}
+                disabled={togglingId !== null}
+              >
+                <Checkbox
+                  status={selected.has(item.id) ? 'checked' : 'unchecked'}
+                  onPress={() => toggle(item.id)}
+                  disabled={togglingId !== null}
+                />
+                <Text variant="bodyMedium">{item.name}</Text>
+              </TouchableOpacity>
+            );
+          }}
           ListEmptyComponent={
             <Text variant="bodySmall" style={styles.empty}>
               {newName.trim() ? '「作成」で新規ラベルを追加' : 'ラベルがありません'}
@@ -163,10 +174,13 @@ const styles = StyleSheet.create({
     color:     '#333',
   },
   row: {
-    flexDirection:  'row',
-    alignItems:     'center',
+    flexDirection:   'row',
+    alignItems:      'center',
     paddingVertical: 4,
-    minHeight:      44,
+    minHeight:       44,
+  },
+  rowDisabled: {
+    opacity: 0.5,
   },
   empty: {
     color:     '#aaa',
