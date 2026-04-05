@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   BackHandler,
@@ -19,13 +18,10 @@ import {
   Snackbar,
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { Note } from '@/domain/entities/Note';
 import { NOTE_COLOR_LIGHT } from '@/ui/theme/colors';
 import { spacing } from '@/ui/theme/spacing';
-import { getNoteRepository } from '@/lib/di';
-import { useNoteForm } from '@/ui/hooks/useNoteForm';
+import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
 import { LabelPickerSheet } from '@/ui/components/common/LabelPickerSheet';
 import { formatRelativeTime } from '@/lib/dateUtils';
@@ -35,162 +31,50 @@ interface Props {
 }
 
 export function EditNoteScreen({ noteId }: Props) {
-  const router   = useRouter();
-  const [note,        setNote]        = useState<Note | null>(null);
-  const [loadingNote, setLoadingNote] = useState(!!noteId);
-  const [saving,      setSaving]      = useState(false);
-  const [showColor,   setShowColor]   = useState(false);
-  const [showLabels,  setShowLabels]  = useState(false);
-  const [snackMsg,    setSnackMsg]    = useState('');
-
-  const mountedRef   = useRef(true);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savingRef    = useRef(false);
-
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  const [showColor,  setShowColor]  = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
 
   const {
+    note,
+    loading,
+    saving,
+    snackMsg,
+    setSnackMsg,
     form,
-    setTitle, setContent, setType, setColor,
-    addChecklistItem, updateChecklistItem,
-    toggleChecklistItem, removeChecklistItem,
-    resetForm, isEmpty,
-  } = useNoteForm();
-
-  // ─── 既存ノート読み込み ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!noteId) return;
-    getNoteRepository()
-      .findById(noteId)
-      .then((n) => {
-        if (!mountedRef.current) return;
-        if (n) {
-          setNote(n);
-          // ★ フォームをロード済みデータで初期化 (Critical fix)
-          resetForm(n);
-        }
-        setLoadingNote(false);
-      })
-      .catch(() => {
-        if (!mountedRef.current) return;
-        setLoadingNote(false);
-      });
-  }, [noteId]); // resetForm は安定した useCallback なので deps 省略安全
-
-  // ─── 保存ロジック ────────────────────────────────────────────────────────
-  const saveNote = useCallback(async (): Promise<void> => {
-    if (savingRef.current) return;
-    if (isEmpty())         return;
-
-    savingRef.current = true;
-    if (mountedRef.current) setSaving(true);
-
-    try {
-      const repo  = getNoteRepository();
-      const items = form.checklistItems
-        .filter((i) => i.text.trim())
-        .map((i, idx) => ({ text: i.text, isChecked: i.isChecked, position: idx * 1000 }));
-
-      if (note) {
-        await repo.update(note.id, {
-          title:   form.title,
-          content: form.content,
-          type:    form.type,
-          color:   form.color,
-        });
-        if (form.type === 'CHECKLIST') {
-          await repo.updateChecklistItems(note.id, items);
-        }
-      } else {
-        const created = await repo.create({
-          title:   form.title,
-          content: form.content,
-          type:    form.type,
-          color:   form.color,
-        });
-        if (mountedRef.current) setNote(created);
-        if (form.type === 'CHECKLIST') {
-          await repo.updateChecklistItems(created.id, items);
-        }
-      }
-    } catch (e) {
-      console.error('saveNote error:', e);
-      if (mountedRef.current) setSnackMsg('保存に失敗しました');
-    } finally {
-      savingRef.current = false;
-      if (mountedRef.current) setSaving(false);
-    }
-  }, [form, note, isEmpty]);
-
-  // ─── 自動保存 (debounce 1秒) ─────────────────────────────────────────────
-  useEffect(() => {
-    if (loadingNote) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      if (mountedRef.current) saveNote();
-    }, 1000);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [loadingNote, saveNote]);
-
-  // ─── 保存して戻る ────────────────────────────────────────────────────────
-  const handleBack = useCallback(async () => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    if (!isEmpty()) await saveNote();
-    router.back();
-  }, [isEmpty, saveNote, router]);
+    setTitle,
+    setContent,
+    setType,
+    setColor,
+    addChecklistItem,
+    updateChecklistItem,
+    toggleChecklistItem,
+    removeChecklistItem,
+    lastAddedKey,
+    handleBack,
+    handleDelete,
+    handlePin,
+    handleLabelChanged,
+    prepareForLabels,
+  } = useEditNote(noteId);
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       handleBack();
-      return true; // デフォルト動作を抑制
+      return true;
     });
     return () => sub.remove();
   }, [handleBack]);
 
-  // ─── 削除 ────────────────────────────────────────────────────────────────
-  const handleDelete = useCallback(() => {
-    Alert.alert('メモを削除', 'このメモを削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除',
-        style: 'destructive',
-        onPress: async () => {
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          if (note) await getNoteRepository().delete(note.id);
-          router.back();
-        },
-      },
-    ]);
-  }, [note, router]);
-
-  // ─── ピン留めトグル ──────────────────────────────────────────────────────
-  const handlePin = useCallback(async () => {
-    if (!note) return;
-    const updated = await getNoteRepository().togglePin(note.id);
-    if (mountedRef.current) setNote(updated);
-  }, [note]);
-
-  // ─── ラベル変更後の反映 ──────────────────────────────────────────────────
-  const handleLabelChanged = useCallback(async () => {
-    if (!note) return;
-    const updated = await getNoteRepository().findById(note.id);
-    if (updated && mountedRef.current) setNote(updated);
-  }, [note]);
-
-  // ─── 新規ノートの即時保存（ラベルボタンを有効にするため） ───────────────
-  // note が null のまま ラベルボタンを押したとき、先に保存してから Sheet を開く
+  // ─── ラベルボタン ─────────────────────────────────────────────────────
   const handleLabelPress = useCallback(async () => {
-    if (!note && !isEmpty()) {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      await saveNote();
-    }
-    if (mountedRef.current) setShowLabels(true);
-  }, [note, isEmpty, saveNote]);
+    const ok = await prepareForLabels();
+    if (ok) setShowLabels(true);
+  }, [prepareForLabels]);
 
   const bgColor = NOTE_COLOR_LIGHT[form.color];
 
-  if (loadingNote) {
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
@@ -259,6 +143,7 @@ export function EditNoteScreen({ noteId }: Props) {
                     onChangeText={updateChecklistItem}
                     onToggle={toggleChecklistItem}
                     onRemove={removeChecklistItem}
+                    autoFocus={item.key === lastAddedKey}
                   />
                 ))}
               <TouchableOpacity
@@ -307,7 +192,6 @@ export function EditNoteScreen({ noteId }: Props) {
             size={22}
             onPress={() => setShowColor(true)}
           />
-          {/* 新規ノートでも押せる（先に保存してからSheetを開く） */}
           <IconButton
             icon="label-outline"
             size={22}
@@ -350,8 +234,6 @@ export function EditNoteScreen({ noteId }: Props) {
 }
 
 // ─── ChecklistRow (メモ化済み) ────────────────────────────────────────────────
-// props をフラット化し onChangeText(key, text) のシグネチャにすることで
-// 親から渡す stable な useCallback と組み合わせて不要な再レンダーを防ぐ
 
 interface RowProps {
   itemKey:      string;
@@ -361,10 +243,11 @@ interface RowProps {
   onToggle:     (key: string) => void;
   onRemove:     (key: string) => void;
   done?:        boolean;
+  autoFocus?:   boolean;
 }
 
 const ChecklistRow = memo(function ChecklistRow({
-  itemKey, text, isChecked, onChangeText, onToggle, onRemove, done,
+  itemKey, text, isChecked, onChangeText, onToggle, onRemove, done, autoFocus,
 }: RowProps) {
   return (
     <View style={rowStyles.row}>
@@ -385,6 +268,7 @@ const ChecklistRow = memo(function ChecklistRow({
         placeholder="アイテム"
         placeholderTextColor="#bbb"
         multiline={false}
+        autoFocus={autoFocus}
       />
       <TouchableOpacity
         onPress={() => onRemove(itemKey)}

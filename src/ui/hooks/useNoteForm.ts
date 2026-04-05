@@ -29,6 +29,8 @@ export interface UseNoteFormReturn {
   /** ロード済みノートでフォームを上書き初期化する */
   resetForm:           (note: Note) => void;
   isEmpty:             () => boolean;
+  /** 直前に追加されたチェックリストアイテムのキー（autoFocus 用） */
+  lastAddedKey:        string | null;
 }
 
 function noteToForm(note: Note): NoteFormState {
@@ -56,6 +58,7 @@ const defaultForm = (): NoteFormState => ({
 export function useNoteForm(): UseNoteFormReturn {
   const keyCounterRef = useRef(0);
   const genKey = useCallback(() => `new-${++keyCounterRef.current}`, []);
+  const [lastAddedKey, setLastAddedKey] = useState<string | null>(null);
 
   // 初期値は常に空。既存ノートは resetForm() で上書きする。
   const [form, setForm] = useState<NoteFormState>(defaultForm());
@@ -85,11 +88,13 @@ export function useNoteForm(): UseNoteFormReturn {
   const setColor = useCallback((v: NoteColor) => setForm((f) => ({ ...f, color: v })), []);
 
   const addChecklistItem = useCallback(() => {
+    const key = genKey();
+    setLastAddedKey(key);
     setForm((f) => ({
       ...f,
       checklistItems: [
         ...f.checklistItems,
-        { key: genKey(), text: '', isChecked: false },
+        { key, text: '', isChecked: false },
       ],
     }));
   }, [genKey]);
@@ -142,5 +147,6 @@ export function useNoteForm(): UseNoteFormReturn {
     removeChecklistItem,
     resetForm,
     isEmpty,
+    lastAddedKey,
   };
 }

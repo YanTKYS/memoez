@@ -71,7 +71,7 @@ export function SearchScreen() {
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <NoteCard note={item} onPress={() => openNote(item)} isGrid={false} />
+            <NoteCard note={item} onPress={openNote} isGrid={false} />
           )}
           ListHeaderComponent={
             <Text variant="labelSmall" style={styles.resultCount}>

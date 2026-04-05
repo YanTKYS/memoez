@@ -81,6 +81,7 @@ export function LabelPickerSheet({
       <Modal
         visible={visible}
         onDismiss={onDismiss}
+        onRequestClose={onDismiss}
         contentContainerStyle={styles.modal}
       >
         <Text variant="titleSmall" style={styles.title}>ラベル</Text>
