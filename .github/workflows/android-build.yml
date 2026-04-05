@@ -60,10 +60,13 @@ jobs:
       # ── gradle.properties にメモリ設定を追記 ────────────────────────────
       # CI ランナーは RAM が限られており Kotlin daemon が OOM でサイレントに
       # クラッシュすることがある。JVM ヒープを拡大し daemon を無効化する。
+      # android.kotlinVersion を明示して 1.9.24 が解決されるのを防ぐ
+      # (Compose Compiler 1.5.15 は 1.9.25 を要求するため)。
       - name: Patch gradle.properties for CI
         run: |
           echo "" >> android/gradle.properties
-          echo "# CI memory overrides" >> android/gradle.properties
+          echo "# CI overrides" >> android/gradle.properties
+          echo "android.kotlinVersion=1.9.25" >> android/gradle.properties
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
           echo "kotlin.daemon.jvm.options=-Xmx2g" >> android/gradle.properties
           echo "org.gradle.workers.max=2" >> android/gradle.properties
@@ -93,17 +96,20 @@ jobs:
 
       # ── ビルド ───────────────────────────────────────────────────────────
       # --info の全出力はファイルに退避し、失敗時だけエラー行を表示する。
-      # これにより CI ログが 2 万行になるのを防ぐ。
+      # grep パターン: ファイルパス行 (先頭が /) を除外し、
+      # Kotlin コンパイラエラー (^e: ) と Gradle エラー行のみ抽出する。
       - name: Build debug APK
         shell: bash
         run: |
           cd android
           ./gradlew assembleDebug --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
-            echo "===== BUILD FAILED: Kotlin / compiler errors ====="
-            grep -E "^e: |error:|ERROR|FAILED|Caused by:|Cannot find|unresolved|Exception" \
-              /tmp/gradle-debug.log | head -150
-            echo "===== last 30 lines ====="
-            tail -30 /tmp/gradle-debug.log
+            echo "===== BUILD FAILED: compiler errors ====="
+            grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
+              /tmp/gradle-debug.log \
+              | grep -v "^/" \
+              | head -100
+            echo "===== last 20 lines ====="
+            tail -20 /tmp/gradle-debug.log
             exit 1
           }
 
@@ -172,7 +178,8 @@ jobs:
       - name: Patch gradle.properties for CI
         run: |
           echo "" >> android/gradle.properties
-          echo "# CI memory overrides" >> android/gradle.properties
+          echo "# CI overrides" >> android/gradle.properties
+          echo "android.kotlinVersion=1.9.25" >> android/gradle.properties
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
           echo "kotlin.daemon.jvm.options=-Xmx2g" >> android/gradle.properties
           echo "org.gradle.workers.max=2" >> android/gradle.properties
@@ -202,11 +209,13 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
-            echo "===== BUILD FAILED: Kotlin / compiler errors ====="
-            grep -E "^e: |error:|ERROR|FAILED|Caused by:|Cannot find|unresolved|Exception" \
-              /tmp/gradle-release.log | head -150
-            echo "===== last 30 lines ====="
-            tail -30 /tmp/gradle-release.log
+            echo "===== BUILD FAILED: compiler errors ====="
+            grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
+              /tmp/gradle-release.log \
+              | grep -v "^/" \
+              | head -100
+            echo "===== last 20 lines ====="
+            tail -20 /tmp/gradle-release.log
             exit 1
           }
 
