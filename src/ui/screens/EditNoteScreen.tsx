@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   BackHandler,
@@ -17,9 +16,9 @@ import {
   ActivityIndicator,
   Snackbar,
 } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/ui/components/common/EmptyState';
+import { ChecklistView } from '@/ui/components/EditNote/ChecklistView';
 import { NOTE_COLOR_LIGHT } from '@/ui/theme/colors';
 import { spacing } from '@/ui/theme/spacing';
 import { useEditNote } from '@/ui/hooks/useEditNote';
@@ -43,6 +42,7 @@ export function EditNoteScreen({ noteId }: Props) {
     loading,
     loadError,
     saving,
+    lastSavedAt,
     snackMsg,
     setSnackMsg,
     form,
@@ -128,6 +128,9 @@ export function EditNoteScreen({ noteId }: Props) {
             <Appbar.Action icon="delete-outline" onPress={handleDelete} />
           )}
           {saving && <ActivityIndicator size="small" style={{ marginRight: 8 }} />}
+          {!saving && lastSavedAt && (
+            <Text variant="labelSmall" style={styles.savedIndicator}>保存しました</Text>
+          )}
         </Appbar.Header>
 
         <ScrollView
@@ -163,53 +166,14 @@ export function EditNoteScreen({ noteId }: Props) {
           )}
 
           {form.type === 'CHECKLIST' && (
-            <View style={styles.checklist}>
-              {form.checklistItems
-                .filter((i) => !i.isChecked)
-                .map((item) => (
-                  <ChecklistRow
-                    key={item.key}
-                    itemKey={item.key}
-                    text={item.text}
-                    isChecked={item.isChecked}
-                    onChangeText={updateChecklistItem}
-                    onToggle={toggleChecklistItem}
-                    onRemove={removeChecklistItem}
-                    autoFocus={item.key === lastAddedKey}
-                  />
-                ))}
-              <TouchableOpacity
-                style={styles.addItem}
-                onPress={addChecklistItem}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialCommunityIcons name="plus" size={18} color="#888" />
-                <Text variant="bodyMedium" style={{ color: '#888' }}>アイテムを追加</Text>
-              </TouchableOpacity>
-
-              {form.checklistItems.some((i) => i.isChecked) && (
-                <>
-                  <Divider style={styles.divider} />
-                  <Text variant="labelSmall" style={styles.doneLabel}>
-                    チェック済み ({form.checklistItems.filter((i) => i.isChecked).length})
-                  </Text>
-                  {form.checklistItems
-                    .filter((i) => i.isChecked)
-                    .map((item) => (
-                      <ChecklistRow
-                        key={item.key}
-                        itemKey={item.key}
-                        text={item.text}
-                        isChecked={item.isChecked}
-                        onChangeText={updateChecklistItem}
-                        onToggle={toggleChecklistItem}
-                        onRemove={removeChecklistItem}
-                        done
-                      />
-                    ))}
-                </>
-              )}
-            </View>
+            <ChecklistView
+              items={form.checklistItems}
+              lastAddedKey={lastAddedKey}
+              onAdd={addChecklistItem}
+              onUpdate={updateChecklistItem}
+              onToggle={toggleChecklistItem}
+              onRemove={removeChecklistItem}
+            />
           )}
         </ScrollView>
 
@@ -266,64 +230,6 @@ export function EditNoteScreen({ noteId }: Props) {
   );
 }
 
-// ─── ChecklistRow (メモ化済み) ────────────────────────────────────────────────
-
-interface RowProps {
-  itemKey:      string;
-  text:         string;
-  isChecked:    boolean;
-  onChangeText: (key: string, text: string) => void;
-  onToggle:     (key: string) => void;
-  onRemove:     (key: string) => void;
-  done?:        boolean;
-  autoFocus?:   boolean;
-}
-
-const ChecklistRow = memo(function ChecklistRow({
-  itemKey, text, isChecked, onChangeText, onToggle, onRemove, done, autoFocus,
-}: RowProps) {
-  return (
-    <View style={rowStyles.row}>
-      <TouchableOpacity
-        onPress={() => onToggle(itemKey)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <MaterialCommunityIcons
-          name={isChecked ? 'checkbox-marked-outline' : 'checkbox-blank-outline'}
-          size={22}
-          color={isChecked ? '#999' : '#444'}
-        />
-      </TouchableOpacity>
-      <TextInput
-        style={[rowStyles.input, done && rowStyles.done]}
-        value={text}
-        onChangeText={(t) => onChangeText(itemKey, t)}
-        placeholder="アイテム"
-        placeholderTextColor="#bbb"
-        multiline={false}
-        autoFocus={autoFocus}
-      />
-      <TouchableOpacity
-        onPress={() => onRemove(itemKey)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <MaterialCommunityIcons name="close" size={18} color="#bbb" />
-      </TouchableOpacity>
-    </View>
-  );
-});
-
-const rowStyles = StyleSheet.create({
-  row: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             spacing.sm,
-    paddingVertical: 6,
-    minHeight:       44,
-  },
-  input: { flex: 1, fontSize: 15, color: '#333' },
-  done:  { textDecorationLine: 'line-through', color: '#999' },
-});
 
 const styles = StyleSheet.create({
   container:     { flex: 1 },
@@ -345,15 +251,6 @@ const styles = StyleSheet.create({
     minHeight:  200,
     lineHeight: 22,
   },
-  checklist: { gap: 2 },
-  addItem: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             spacing.xs,
-    paddingVertical: spacing.sm,
-    minHeight:       44,
-  },
-  doneLabel: { color: '#888', marginBottom: spacing.xs },
   bottomBar: {
     flexDirection:     'row',
     alignItems:        'center',
@@ -365,6 +262,10 @@ const styles = StyleSheet.create({
   updatedAt: {
     color:       '#aaa',
     marginLeft:  'auto',
+    marginRight: spacing.sm,
+  },
+  savedIndicator: {
+    color:       '#4caf50',
     marginRight: spacing.sm,
   },
 });

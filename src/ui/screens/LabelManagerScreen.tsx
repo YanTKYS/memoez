@@ -13,6 +13,7 @@ import {
   Divider,
   ActivityIndicator,
   FAB,
+  Snackbar,
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -50,17 +51,19 @@ export function LabelManagerScreen() {
     setEditText(label.name);
   };
 
+  const [snackMsg, setSnackMsg] = useState('');
+
   const commitEdit = async () => {
     if (!editingId || !editText.trim()) { setEditingId(null); return; }
-    const trimmed = editText.trim();
-    // 楽観的更新: DB成功前にUI先行更新
+    const trimmed    = editText.trim();
+    const prevLabels = labels;
     setLabels((ls) => ls.map((l) => l.id === editingId ? { ...l, name: trimmed } : l));
     setEditingId(null);
     try {
       await getLabelRepository().update(editingId, trimmed);
     } catch {
-      // 失敗時はリロードで真値に戻す
-      load();
+      setLabels(prevLabels);
+      setSnackMsg('ラベルの更新に失敗しました');
     }
   };
 
@@ -74,12 +77,13 @@ export function LabelManagerScreen() {
           text: '削除',
           style: 'destructive',
           onPress: async () => {
-            // 楽観的削除
+            const prevLabels = labels;
             setLabels((ls) => ls.filter((l) => l.id !== label.id));
             try {
               await getLabelRepository().delete(label.id);
             } catch {
-              load();
+              setLabels(prevLabels);
+              setSnackMsg('ラベルの削除に失敗しました');
             }
           },
         },
@@ -94,10 +98,9 @@ export function LabelManagerScreen() {
     setShowNew(false);
     try {
       const created = await getLabelRepository().create(name);
-      // 成功後に追加 (IDが必要なので楽観的追加ではなくリアル追加)
       setLabels((ls) => [...ls, created].sort((a, b) => a.name.localeCompare(b.name)));
     } catch {
-      load();
+      setSnackMsg('ラベルの作成に失敗しました');
     }
   };
 
@@ -180,6 +183,14 @@ export function LabelManagerScreen() {
         style={[styles.fab, { bottom: spacing.xl + safeBottom }]}
         onPress={() => setShowNew(true)}
       />
+
+      <Snackbar
+        visible={!!snackMsg}
+        onDismiss={() => setSnackMsg('')}
+        duration={2500}
+      >
+        {snackMsg}
+      </Snackbar>
     </SafeAreaView>
   );
 }

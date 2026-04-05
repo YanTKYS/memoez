@@ -8,6 +8,15 @@ import { toNote, toLabel, toChecklistItem } from '../mappers/noteMapper';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
+/** UUID v4 生成（同期対応準備用） */
+function generateServerId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export class DrizzleNoteRepository implements INoteRepository {
   constructor(private readonly db: DB) {}
 
@@ -156,9 +165,7 @@ export class DrizzleNoteRepository implements INoteRepository {
         sortWeight: maxWeight + 1000,
         createdAt:  now,
         updatedAt:  now,
-        // 将来の同期拡張ポイント:
-        // serverId: uuid() ← クライアント側でUUIDを生成しておくと
-        // オフライン作成 → 後でサーバーに push が容易になる
+        serverId:   generateServerId(), // オフライン作成 → 後でサーバーに push する際の識別子
       })
       .returning();
 

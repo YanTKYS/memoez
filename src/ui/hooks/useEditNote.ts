@@ -9,17 +9,22 @@ import { useNoteForm } from './useNoteForm';
 export function useEditNote(noteId?: number) {
   const router = useRouter();
 
-  const [note,      setNote]      = useState<Note | null>(null);
-  const [loading,   setLoading]   = useState(!!noteId);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [saving,    setSaving]    = useState(false);
-  const [snackMsg,  setSnackMsg]  = useState('');
+  const [note,        setNote]        = useState<Note | null>(null);
+  const [loading,     setLoading]     = useState(!!noteId);
+  const [loadError,   setLoadError]   = useState<string | null>(null);
+  const [saving,      setSaving]      = useState(false);
+  const [snackMsg,    setSnackMsg]    = useState('');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const mountedRef   = useRef(true);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savingRef    = useRef(false);
+  const saveTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedFeedbackRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingRef         = useRef(false);
 
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
+  }, []);
 
   const noteForm = useNoteForm();
   const { form, resetForm, isEmpty } = noteForm;
@@ -51,6 +56,7 @@ export function useEditNote(noteId?: number) {
 
     try {
       const repo  = getNoteRepository();
+      const now   = new Date();
       const items = form.checklistItems
         .filter((i) => i.text.trim())
         .map((i, idx) => ({ text: i.text, isChecked: i.isChecked, position: idx * 1000 }));
@@ -67,9 +73,9 @@ export function useEditNote(noteId?: number) {
 
         if (form.type === 'CHECKLIST') {
           await repo.updateChecklistItems(note.id, items);
-          // updateChecklistItems は notes.updatedAt も更新するので再取得
-          const refreshed = await repo.findById(note.id);
-          if (refreshed && mountedRef.current) setNote(refreshed);
+          // updateChecklistItems は notes.updatedAt を now に更新するので
+          // findById を呼ばずクライアント側で updatedAt を反映
+          if (mountedRef.current) setNote((prev) => prev ? { ...prev, updatedAt: now } : prev);
         }
       } else {
         const created = await repo.create({
@@ -82,10 +88,17 @@ export function useEditNote(noteId?: number) {
 
         if (form.type === 'CHECKLIST') {
           await repo.updateChecklistItems(created.id, items);
-          // updateChecklistItems は notes.updatedAt も更新するので再取得
-          const refreshed = await repo.findById(created.id);
-          if (refreshed && mountedRef.current) setNote(refreshed);
+          if (mountedRef.current) setNote((prev) => prev ? { ...prev, updatedAt: now } : prev);
         }
+      }
+
+      // 保存成功フィードバック（3秒後にクリア）
+      if (mountedRef.current) {
+        setLastSavedAt(now);
+        if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
+        savedFeedbackRef.current = setTimeout(() => {
+          if (mountedRef.current) setLastSavedAt(null);
+        }, 3000);
       }
     } catch (e) {
       console.error('saveNote error:', e);
@@ -187,6 +200,7 @@ export function useEditNote(noteId?: number) {
     loading,
     loadError,
     saving,
+    lastSavedAt,
     snackMsg,
     setSnackMsg,
     ...noteForm,

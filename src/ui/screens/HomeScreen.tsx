@@ -102,8 +102,8 @@ export function HomeScreen() {
     );
   }, [colGap, cardWidth, numCols, openNote]);
 
-  const keyExtractor = useCallback((item: SectionItem) => {
-    if (item.kind === 'header')   return `header-${item.label}`;
+  const keyExtractor = useCallback((item: SectionItem, index: number) => {
+    if (item.kind === 'header')   return `header-${index}`;
     if (item.kind === 'grid-row') return item.rowKey;
     return `note-${item.note.id}`;
   }, []);
