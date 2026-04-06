@@ -8,6 +8,7 @@ import {
   Platform,
   BackHandler,
   Alert,
+  useColorScheme,
 } from 'react-native';
 import {
   Appbar,
@@ -16,11 +17,12 @@ import {
   Divider,
   ActivityIndicator,
   Snackbar,
+  useTheme,
 } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { ChecklistView } from '@/ui/components/EditNote/ChecklistView';
-import { NOTE_COLOR_LIGHT } from '@/ui/theme/colors';
+import { NOTE_COLOR_LIGHT, NOTE_COLOR_DARK } from '@/ui/theme/colors';
 import { spacing } from '@/ui/theme/spacing';
 import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
@@ -97,7 +99,10 @@ export function EditNoteScreen({ noteId }: Props) {
     if (ok) setShowLabels(true);
   }, [prepareForLabels]);
 
-  const bgColor = NOTE_COLOR_LIGHT[form.color];
+  const colorScheme = useColorScheme();
+  const theme       = useTheme();
+  const palette     = colorScheme === 'dark' ? NOTE_COLOR_DARK : NOTE_COLOR_LIGHT;
+  const bgColor     = palette[form.color];
 
   if (loading) {
     return (
@@ -156,9 +161,9 @@ export function EditNoteScreen({ noteId }: Props) {
           contentContainerStyle={styles.scrollContent}
         >
           <TextInput
-            style={styles.titleInput}
+            style={[styles.titleInput, { color: theme.colors.onSurface }]}
             placeholder="タイトル"
-            placeholderTextColor="#aaa"
+            placeholderTextColor={theme.colors.onSurfaceDisabled}
             value={form.title}
             onChangeText={setTitle}
             multiline={false}
@@ -172,9 +177,9 @@ export function EditNoteScreen({ noteId }: Props) {
           {form.type === 'TEXT' && (
             <TextInput
               ref={contentInputRef}
-              style={styles.contentInput}
+              style={[styles.contentInput, { color: theme.colors.onSurface }]}
               placeholder="メモを入力..."
-              placeholderTextColor="#aaa"
+              placeholderTextColor={theme.colors.onSurfaceDisabled}
               value={form.content}
               onChangeText={setContent}
               multiline
@@ -194,7 +199,7 @@ export function EditNoteScreen({ noteId }: Props) {
           )}
         </ScrollView>
 
-        <View style={[styles.bottomBar, { backgroundColor: bgColor }]}>
+        <View style={[styles.bottomBar, { backgroundColor: bgColor, borderTopColor: theme.colors.outlineVariant }]}>
           <IconButton
             icon={form.type === 'TEXT' ? 'checkbox-marked-outline' : 'text'}
             size={22}
@@ -211,7 +216,7 @@ export function EditNoteScreen({ noteId }: Props) {
             onPress={handleLabelPress}
           />
           {note && (
-            <Text variant="labelSmall" style={styles.updatedAt}>
+            <Text variant="labelSmall" style={[styles.updatedAt, { color: theme.colors.onSurfaceVariant }]}>
               {formatRelativeTime(note.updatedAt)}
             </Text>
           )}
@@ -256,7 +261,6 @@ const styles = StyleSheet.create({
   titleInput: {
     fontSize:        20,
     fontWeight:      '600',
-    color:           '#1a1a1a',
     paddingVertical: 4,
     marginBottom:    spacing.sm,
     minHeight:       44,
@@ -264,7 +268,6 @@ const styles = StyleSheet.create({
   divider:      { marginVertical: spacing.sm },
   contentInput: {
     fontSize:   15,
-    color:      '#333',
     minHeight:  200,
     lineHeight: 22,
   },
@@ -273,11 +276,9 @@ const styles = StyleSheet.create({
     alignItems:        'center',
     paddingHorizontal: spacing.sm,
     borderTopWidth:    1,
-    borderTopColor:    '#eee',
     height:            52,
   },
   updatedAt: {
-    color:       '#aaa',
     marginLeft:  'auto',
     marginRight: spacing.sm,
   },

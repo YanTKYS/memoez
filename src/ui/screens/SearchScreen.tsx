@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TextInput as RNTextInput,
 } from 'react-native';
-import { Appbar, Text, ActivityIndicator } from 'react-native-paper';
+import { Appbar, Text, ActivityIndicator, useTheme } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NoteCard } from '@/ui/components/NoteCard';
@@ -16,10 +16,10 @@ import type { Note } from '@/domain/entities/Note';
 
 export function SearchScreen() {
   const router          = useRouter();
+  const theme           = useTheme();
   const inputRef        = useRef<RNTextInput>(null);
   const { query, setQuery, results, loading } = useSearch();
 
-  // 画面フォーカス時にキーボードを表示（setTimeout より確実）
   useFocusEffect(
     useCallback(() => {
       inputRef.current?.focus();
@@ -29,15 +29,14 @@ export function SearchScreen() {
   const openNote = useCallback((note: Note) => router.push(`/note/${note.id}`), [router]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* SearchAppBar */}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <Appbar.Header elevated>
         <Appbar.BackAction onPress={() => router.back()} />
         <RNTextInput
           ref={inputRef}
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: theme.colors.onSurface }]}
           placeholder="検索..."
-          placeholderTextColor="#aaa"
+          placeholderTextColor={theme.colors.onSurfaceDisabled}
           value={query}
           onChangeText={setQuery}
           returnKeyType="search"
@@ -49,7 +48,6 @@ export function SearchScreen() {
         )}
       </Appbar.Header>
 
-      {/* コンテンツ */}
       {!query.trim() ? (
         <EmptyState
           icon="magnify"
@@ -76,7 +74,7 @@ export function SearchScreen() {
             <NoteCard note={item} onPress={openNote} isGrid={false} />
           )}
           ListHeaderComponent={
-            <Text variant="labelSmall" style={styles.resultCount}>
+            <Text variant="labelSmall" style={[styles.resultCount, { color: theme.colors.onSurfaceVariant }]}>
               {results.length}件見つかりました
             </Text>
           }
@@ -87,27 +85,22 @@ export function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1 },
   center: {
     flex:           1,
     alignItems:     'center',
     justifyContent: 'center',
   },
   searchInput: {
-    flex:      1,
-    fontSize:  16,
-    color:     '#1a1a1a',
-    height:    '100%',
+    flex:     1,
+    fontSize: 16,
+    height:   '100%',
   },
   list: {
-    padding:      spacing.md,
+    padding:       spacing.md,
     paddingBottom: 40,
   },
   resultCount: {
-    color:        '#888',
     marginBottom: spacing.sm,
   },
 });

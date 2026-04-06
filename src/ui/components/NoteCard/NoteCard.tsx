@@ -1,9 +1,9 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { Text, Chip } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
+import { Text, Chip, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Note } from '@/domain/entities/Note';
-import { NOTE_COLOR_LIGHT } from '@/ui/theme/colors';
+import { NOTE_COLOR_LIGHT, NOTE_COLOR_DARK } from '@/ui/theme/colors';
 import { spacing } from '@/ui/theme/spacing';
 import { formatRelativeTime } from '@/lib/dateUtils';
 
@@ -15,9 +15,13 @@ interface Props {
 }
 
 export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = true }: Props) {
-  const bgColor  = NOTE_COLOR_LIGHT[note.color];
-  const maxLines = isGrid ? 5 : 2;
+  const colorScheme = useColorScheme();
+  const theme       = useTheme();
+  const palette     = colorScheme === 'dark' ? NOTE_COLOR_DARK : NOTE_COLOR_LIGHT;
+  const bgColor     = palette[note.color];
+  const maxLines    = isGrid ? 5 : 2;
   const handlePress = useCallback(() => onPress(note), [onPress, note]);
+  const subtleColor = theme.colors.onSurfaceVariant;
 
   return (
     <TouchableOpacity
@@ -67,13 +71,13 @@ export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = t
 
         {/* ピン留めアイコン */}
         {note.isPinned && (
-          <MaterialCommunityIcons name="pin" size={14} color="#888" />
+          <MaterialCommunityIcons name="pin" size={14} color={subtleColor} />
         )}
       </View>
 
       {/* 更新時刻 (リストモード) */}
       {!isGrid && (
-        <Text variant="labelSmall" style={styles.time}>
+        <Text variant="labelSmall" style={[styles.time, { color: subtleColor }]}>
           {formatRelativeTime(note.updatedAt)}
         </Text>
       )}

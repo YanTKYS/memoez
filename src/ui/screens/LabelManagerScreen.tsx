@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   FAB,
   Snackbar,
+  useTheme,
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -26,6 +27,7 @@ import { spacing } from '@/ui/theme/spacing';
 
 export function LabelManagerScreen() {
   const router                     = useRouter();
+  const theme                      = useTheme();
   const { bottom: safeBottom }     = useSafeAreaInsets();
   const [labels, setLabels]       = useState<Label[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -105,7 +107,7 @@ export function LabelManagerScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <Appbar.Header elevated>
         <Appbar.BackAction onPress={() => router.back()} />
         <Appbar.Content title="ラベルを編集" />
@@ -120,14 +122,14 @@ export function LabelManagerScreen() {
           contentContainerStyle={styles.list}
           ListHeaderComponent={
             showNew ? (
-              <View style={styles.newRow}>
-                <MaterialCommunityIcons name="label-outline" size={20} color="#888" />
+              <View style={[styles.newRow, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <MaterialCommunityIcons name="label-outline" size={20} color={theme.colors.onSurfaceVariant} />
                 <RNTextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.colors.onSurface }]}
                   value={newName}
                   onChangeText={setNewName}
                   placeholder="新しいラベル名"
-                  placeholderTextColor="#bbb"
+                  placeholderTextColor={theme.colors.onSurfaceDisabled}
                   autoFocus
                   onSubmitEditing={createLabel}
                   returnKeyType="done"
@@ -148,10 +150,10 @@ export function LabelManagerScreen() {
           }
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <MaterialCommunityIcons name="label-outline" size={20} color="#888" />
+              <MaterialCommunityIcons name="label-outline" size={20} color={theme.colors.onSurfaceVariant} />
               {editingId === item.id ? (
                 <RNTextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.colors.onSurface }]}
                   value={editText}
                   onChangeText={setEditText}
                   autoFocus
@@ -200,7 +202,7 @@ export function LabelManagerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -220,18 +222,16 @@ const styles = StyleSheet.create({
     alignItems:    'center',
     paddingLeft:   spacing.md,
     paddingVertical: 2,
-    backgroundColor: '#f9f9f9',
   },
   labelName: {
     flex: 1,
     marginLeft: spacing.sm,
   },
   input: {
-    flex:      1,
-    fontSize:  15,
-    color:     '#333',
+    flex:       1,
+    fontSize:   15,
     marginLeft: spacing.sm,
-    height:    44,
+    height:     44,
   },
   fab: {
     position: 'absolute',

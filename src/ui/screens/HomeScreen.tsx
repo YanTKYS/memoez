@@ -7,7 +7,7 @@ import {
   RefreshControl,
   ListRenderItem,
 } from 'react-native';
-import { Appbar, FAB, Text, ActivityIndicator } from 'react-native-paper';
+import { Appbar, FAB, Text, ActivityIndicator, useTheme } from 'react-native-paper';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCard } from '@/ui/components/NoteCard';
@@ -26,6 +26,7 @@ type SectionItem =
 
 export function HomeScreen() {
   const router           = useRouter();
+  const theme            = useTheme();
   const { width }        = useWindowDimensions();
   const { bottom: safeBottom } = useSafeAreaInsets();
   const layoutMode   = useSettingsStore((s) => s.layoutMode);
@@ -78,7 +79,7 @@ export function HomeScreen() {
   const renderItem = useCallback<ListRenderItem<SectionItem>>(({ item }) => {
     if (item.kind === 'header') {
       return (
-        <Text variant="labelSmall" style={styles.sectionHeader}>
+        <Text variant="labelSmall" style={[styles.sectionHeader, { color: theme.colors.onSurfaceVariant }]}>
           {item.label}
         </Text>
       );
@@ -109,7 +110,7 @@ export function HomeScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <Appbar.Header elevated>
         <Appbar.Content title="MemoEZ" />
         <Appbar.Action
@@ -166,11 +167,10 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: '#fff' },
+  container:     { flex: 1 },
   center:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list:          { paddingHorizontal: spacing.md, paddingBottom: 100 },
   sectionHeader: {
-    color:         '#888',
     marginTop:     spacing.md,
     marginBottom:  spacing.xs,
     letterSpacing: 0.8,
