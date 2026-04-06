@@ -112,6 +112,30 @@ jobs:
             exit 1
           }
 
+      # ── 生成された APK を特定する ────────────────────────────────────────
+      # AGP のバージョンにより unsigned / 署名済みどちらが生成されるか変わる
+      - name: Locate release APK
+        id: locate_apk
+        run: |
+          APK_DIR="android/app/build/outputs/apk/release"
+          echo "=== APK directory contents ==="
+          ls -lh "$APK_DIR" || echo "(directory not found)"
+
+          # 優先順: unsigned → apk 全般
+          if [ -f "$APK_DIR/app-release-unsigned.apk" ]; then
+            echo "unsigned_apk=$APK_DIR/app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
+          elif [ -f "$APK_DIR/app-release.apk" ]; then
+            echo "unsigned_apk=$APK_DIR/app-release.apk" >> "$GITHUB_OUTPUT"
+          else
+            FOUND=$(find "$APK_DIR" -name "*.apk" | head -1)
+            if [ -n "$FOUND" ]; then
+              echo "unsigned_apk=$FOUND" >> "$GITHUB_OUTPUT"
+            else
+              echo "ERROR: No APK found in $APK_DIR" && exit 1
+            fi
+          fi
+          echo "Resolved APK: $(cat $GITHUB_OUTPUT | grep unsigned_apk)"
+
       # ── タグからリリースチャンネルを判定 ─────────────────────────────────
       - name: Detect release channel from tag
         id: release_channel
@@ -173,7 +197,7 @@ jobs:
           KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_SDK_ROOT:  ${{ env.ANDROID_SDK_ROOT }}
         run: |
-          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          UNSIGNED_APK="${{ steps.locate_apk.outputs.unsigned_apk }}"
           ALIGNED_APK="android/app/build/outputs/apk/release/app-release-aligned.apk"
           SIGNED_APK="android/app/build/outputs/apk/release/app-release-signed.apk"
           BUILD_TOOLS_DIR="$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -n1)"
@@ -202,12 +226,11 @@ jobs:
         id: apk
         run: |
           SIGNED="android/app/build/outputs/apk/release/app-release-signed.apk"
-          UNSIGNED="android/app/build/outputs/apk/release/app-release-unsigned.apk"
           if [ -f "$SIGNED" ]; then
-            echo "path=$SIGNED"  >> "$GITHUB_OUTPUT"
+            echo "path=$SIGNED" >> "$GITHUB_OUTPUT"
             echo "label=app-release-signed.apk" >> "$GITHUB_OUTPUT"
           else
-            echo "path=$UNSIGNED" >> "$GITHUB_OUTPUT"
+            echo "path=${{ steps.locate_apk.outputs.unsigned_apk }}" >> "$GITHUB_OUTPUT"
             echo "label=app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
             echo "⚠️ Signing secrets not configured — uploading unsigned APK."
           fi
