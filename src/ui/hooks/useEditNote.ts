@@ -189,13 +189,26 @@ export function useEditNote(noteId?: number) {
   }, [note]);
 
   // ─── 新規ノートの即時保存（ラベルシートを開く前に ID を確保する） ────────
+  // 空のノートでも createAndAttachLabel が動作するよう必ず DB に保存する
   const prepareForLabels = useCallback(async (): Promise<boolean> => {
-    if (!note && !isEmpty()) {
+    if (!note) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      await saveNote();
+      if (!isEmpty()) {
+        await saveNote();
+      } else {
+        // フォームが空でもノートを作成して ID を確保する
+        try {
+          const created = await getNoteRepository().create({
+            title: '', content: '', type: form.type, color: form.color,
+          });
+          if (mountedRef.current) setNote(created);
+        } catch (e) {
+          console.error('prepareForLabels create error:', e);
+        }
+      }
     }
     return mountedRef.current;
-  }, [note, isEmpty, saveNote]);
+  }, [note, isEmpty, saveNote, form.type, form.color]);
 
   return {
     note,

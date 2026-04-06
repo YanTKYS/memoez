@@ -3,7 +3,8 @@ import { Stack } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { memoEZTheme } from '@/ui/theme/theme';
+import { useColorScheme } from 'react-native';
+import { memoEZTheme, memoEZDarkTheme } from '@/ui/theme/theme';
 import { initDatabase } from '@/data/db/client';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Text, Button } from 'react-native-paper';
@@ -13,6 +14,8 @@ type DbState = 'loading' | 'ready' | 'error';
 export default function RootLayout() {
   const [dbState, setDbState] = useState<DbState>('loading');
   const [errMsg,  setErrMsg]  = useState('');
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? memoEZDarkTheme : memoEZTheme;
 
   const init = () => {
     setDbState('loading');
@@ -51,8 +54,8 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <PaperProvider theme={memoEZTheme}>
-        <StatusBar style="auto" />
+      <PaperProvider theme={theme}>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         <Stack screenOptions={{ headerShown: false }} />
       </PaperProvider>
     </SafeAreaProvider>

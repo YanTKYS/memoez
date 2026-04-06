@@ -176,11 +176,13 @@ const styles = StyleSheet.create({
     flex:          1,
   },
   chip: {
-    height:          22,
     backgroundColor: 'rgba(0,0,0,0.06)',
+    height:          26,
   },
   chipText: {
-    fontSize: 10,
+    fontSize:       10,
+    lineHeight:     14,
+    marginVertical: 0,
   },
   time: {
     color:     '#888',
