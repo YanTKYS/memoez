@@ -1,0 +1,207 @@
+name: Release Signed APK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  release-signed-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Node.js ─────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── JDK / Android SDK ───────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            tools
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+            ndk;26.1.10909125
+
+      # ── Expo prebuild (managed → bare) ──────────────────────────────────
+      - name: Expo prebuild
+        run: npx expo prebuild --platform android --clean --no-install
+
+      # ── android/build.gradle / gradle.properties をパッチ ───────────────
+      # 生成された build.gradle は kotlinVersion を ext に定義するが
+      # classpath にバージョンを指定していないため RN の BOM が 1.9.24 を
+      # 解決してしまう。Compose Compiler 1.5.15 は 1.9.25 必須。
+      - name: Patch android build files
+        run: |
+          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${kotlinVersion}\")|" android/build.gradle
+          {
+            echo ""
+            echo "# CI overrides"
+            echo "android.kotlinVersion=1.9.25"
+            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
+            echo "kotlin.daemon.jvm.options=-Xmx2g"
+            echo "org.gradle.workers.max=2"
+          } >> android/gradle.properties
+
+      # ── Gradle キャッシュ ────────────────────────────────────────────────
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('package-lock.json', 'app.json') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      # ── リリース APK ビルド ──────────────────────────────────────────────
+      - name: Build release APK (unsigned)
+        shell: bash
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
+            echo "===== BUILD FAILED: compiler errors ====="
+            grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
+              /tmp/gradle-release.log \
+              | grep -v "^/" \
+              | head -100
+            echo "===== last 20 lines ====="
+            tail -20 /tmp/gradle-release.log
+            exit 1
+          }
+
+      # ── タグからリリースチャンネルを判定 ─────────────────────────────────
+      - name: Detect release channel from tag
+        id: release_channel
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          if [[ "$TAG_NAME" == *"-beta"* ]]; then
+            echo "prerelease=true"  >> "$GITHUB_OUTPUT"
+            echo "channel=beta"     >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "channel=stable"   >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 署名シークレットの存在チェック ──────────────────────────────────
+      - name: Check signing secrets
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64:  ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS:        ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD:     ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && \
+             [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && \
+             [ -n "$ANDROID_KEY_ALIAS" ] && \
+             [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets detected."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets are missing. Skipping signing and release upload."
+          fi
+
+      # ── キーストアのデコード ─────────────────────────────────────────────
+      - name: Decode keystore
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release-keystore.jks
+
+      # ── エイリアス確認 ───────────────────────────────────────────────────
+      - name: Validate keystore alias
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS:         ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          keytool -list \
+            -keystore release-keystore.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias     "$ANDROID_KEY_ALIAS"
+
+      # ── zipalign → apksigner で署名 ──────────────────────────────────────
+      - name: Sign APK
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS:         ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_SDK_ROOT:  ${{ env.ANDROID_SDK_ROOT }}
+        run: |
+          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED_APK="android/app/build/outputs/apk/release/app-release-aligned.apk"
+          SIGNED_APK="android/app/build/outputs/apk/release/app-release-signed.apk"
+          BUILD_TOOLS_DIR="$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -n1)"
+          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+
+          test -x "$ZIPALIGN"  || (echo "zipalign not found: $ZIPALIGN"  && exit 1)
+          test -x "$APKSIGNER" || (echo "apksigner not found: $APKSIGNER" && exit 1)
+
+          "$ZIPALIGN" -p -f 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+          "$APKSIGNER" sign \
+            --ks           release-keystore.jks \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass      "pass:$KEYSTORE_PASSWORD" \
+            --key-pass     "pass:$KEY_PASSWORD" \
+            --out          "$SIGNED_APK" \
+            "$ALIGNED_APK"
+
+          "$APKSIGNER" verify "$SIGNED_APK"
+          echo "APK signed and verified: $SIGNED_APK"
+
+      # ── GitHub Release を作成して APK をアップロード ────────────────────
+      - name: Create GitHub Release and upload APK
+        if: steps.signing.outputs.ready == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/app-release-signed.apk
+          generate_release_notes: true
+          prerelease: ${{ steps.release_channel.outputs.prerelease }}
+          name: ${{ github.ref_name }} (${{ steps.release_channel.outputs.channel }})
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 署名シークレット未設定時は unsigned APK をアーティファクト保存 ──
+      - name: Upload unsigned APK as artifact (no signing secrets)
+        if: steps.signing.outputs.ready != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-unsigned
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 30
+
+      - name: Skip signed release (no signing secrets)
+        if: steps.signing.outputs.ready != 'true'
+        run: echo "Skipped signed release upload. Configure ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD secrets to enable."
