@@ -8,6 +8,7 @@
     <img src="docs/screenshots/home.png" width="240" alt="ホーム画面">
     <img src="docs/screenshots/edit.png" width="240" alt="メモ編集画面">
     <img src="docs/screenshots/search.png" width="240" alt="検索画面">
+    <img src="docs/screenshots/labels.png" width="240" alt="ラベル管理画面">
   </p>
 -->
 
@@ -17,7 +18,7 @@
 - チェックリスト形式のメモ
 - ラベルによる分類（多対多）
 - メモのピン留め
-- カラーによるメモ分類
+- カラーによるメモの色分け
 - 全文検索（SQLite FTS5）
 - ダーク / ライトテーマ切り替え（Zustand で永続化）
 - 将来のサーバー同期に向けた `serverId` / `syncedAt` カラム対応済み
@@ -28,9 +29,9 @@
 |------|-----------|
 | React Native | 0.76.5 |
 | Expo SDK | 52 |
-| Expo Router | 4 |
+| Expo Router | 4（typedRoutes 有効） |
 | Drizzle ORM + expo-sqlite | drizzle-orm ^0.38.3 / expo-sqlite ~15.1.0 |
-| React Native Paper | ^5.12.5 (Material Design 3) |
+| React Native Paper | ^5.12.5（Material Design 3） |
 | Zustand | ^5.0.2 |
 | TypeScript | strict mode |
 | Jest + jest-expo | ^29.7.0 / ~52.0.0 |
@@ -84,7 +85,7 @@ npm test
 ### ローカルビルド（デバッグ APK）
 
 ```bash
-# prebuild で android/ を生成
+# prebuild で android/ を生成（既存の android/ を上書きする場合は --clean）
 npx expo prebuild --platform android --clean
 
 # デバッグ APK をビルド
@@ -125,6 +126,8 @@ git push origin v1.2.0-beta
 - 署名シークレット（`ANDROID_KEYSTORE_BASE64` 等）が設定済みの場合 → 署名済み APK を GitHub Release に添付
 - 署名シークレット未設定の場合 → 未署名 APK を GitHub Release に添付（実機テスト用）
 - `-beta` を含むタグ → プレリリース扱い
+
+詳細な署名設定手順は [docs/ci-cd.md](docs/ci-cd.md) を参照してください。
 
 ## ディレクトリ構造
 
