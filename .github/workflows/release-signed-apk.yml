@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v1.0.0 or v1.0.0-beta)'
+        required: true
+        default: 'v0.0.0-test'
 
 permissions:
   contents: write
@@ -102,7 +108,7 @@ jobs:
       - name: Detect release channel from tag
         id: release_channel
         run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
+          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
           if [[ "$TAG_NAME" == *"-beta"* ]]; then
             echo "prerelease=true"  >> "$GITHUB_OUTPUT"
             echo "channel=beta"     >> "$GITHUB_OUTPUT"
