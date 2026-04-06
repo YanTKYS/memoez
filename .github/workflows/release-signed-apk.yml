@@ -196,26 +196,29 @@ jobs:
           echo "APK signed and verified: $SIGNED_APK"
 
       # ── GitHub Release を作成して APK をアップロード ────────────────────
+      # 署名済み APK があれば signed を、なければ unsigned を Release に添付する。
+      # どちらの場合も GitHub Release は必ず作成される。
+      - name: Resolve APK path for release
+        id: apk
+        run: |
+          SIGNED="android/app/build/outputs/apk/release/app-release-signed.apk"
+          UNSIGNED="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ -f "$SIGNED" ]; then
+            echo "path=$SIGNED"  >> "$GITHUB_OUTPUT"
+            echo "label=app-release-signed.apk" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=$UNSIGNED" >> "$GITHUB_OUTPUT"
+            echo "label=app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Signing secrets not configured — uploading unsigned APK."
+          fi
+
       - name: Create GitHub Release and upload APK
-        if: steps.signing.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: android/app/build/outputs/apk/release/app-release-signed.apk
+          files: ${{ steps.apk.outputs.path }}
           generate_release_notes: true
           prerelease: ${{ steps.release_channel.outputs.prerelease }}
-          name: ${{ github.ref_name }} (${{ steps.release_channel.outputs.channel }})
+          name: ${{ github.event.inputs.tag_name || github.ref_name }} (${{ steps.release_channel.outputs.channel }})
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ── 署名シークレット未設定時は unsigned APK をアーティファクト保存 ──
-      - name: Upload unsigned APK as artifact (no signing secrets)
-        if: steps.signing.outputs.ready != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-unsigned
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
-          retention-days: 30
-
-      - name: Skip signed release (no signing secrets)
-        if: steps.signing.outputs.ready != 'true'
-        run: echo "Skipped signed release upload. Configure ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD secrets to enable."
