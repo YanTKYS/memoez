@@ -57,19 +57,30 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean --no-install
 
-      # ── gradle.properties にメモリ設定を追記 ────────────────────────────
-      # CI ランナーは RAM が限られており Kotlin daemon が OOM でサイレントに
-      # クラッシュすることがある。JVM ヒープを拡大し daemon を無効化する。
-      # android.kotlinVersion を明示して 1.9.24 が解決されるのを防ぐ
-      # (Compose Compiler 1.5.15 は 1.9.25 を要求するため)。
-      - name: Patch gradle.properties for CI
+      # ── android/build.gradle / gradle.properties をパッチ ───────────────
+      # 生成された build.gradle は kotlinVersion を ext に定義するが
+      # classpath にバージョンを指定していないため RN の BOM が 1.9.24 を
+      # 解決してしまう。Compose Compiler 1.5.15 は 1.9.25 必須なので
+      # classpath に $kotlinVersion を明示する。
+      - name: Patch android build files for CI
         run: |
-          echo "" >> android/gradle.properties
-          echo "# CI overrides" >> android/gradle.properties
-          echo "android.kotlinVersion=1.9.25" >> android/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
-          echo "kotlin.daemon.jvm.options=-Xmx2g" >> android/gradle.properties
-          echo "org.gradle.workers.max=2" >> android/gradle.properties
+          # build.gradle: kotlin-gradle-plugin に $kotlinVersion を追加
+          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${kotlinVersion}\")|" android/build.gradle
+
+          # gradle.properties: メモリ設定を追記
+          {
+            echo ""
+            echo "# CI overrides"
+            echo "android.kotlinVersion=1.9.25"
+            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
+            echo "kotlin.daemon.jvm.options=-Xmx2g"
+            echo "org.gradle.workers.max=2"
+          } >> android/gradle.properties
+
+          echo "=== patched build.gradle classpath ==="
+          grep "kotlin-gradle-plugin" android/build.gradle
+          echo "=== patched gradle.properties (kotlin lines) ==="
+          grep -i kotlin android/gradle.properties
 
       # ── Gradle キャッシュ ────────────────────────────────────────────────
       # キャッシュキー: npm パッケージ + app.json で決定される生成物に依存
@@ -175,14 +186,17 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean --no-install
 
-      - name: Patch gradle.properties for CI
+      - name: Patch android build files for CI
         run: |
-          echo "" >> android/gradle.properties
-          echo "# CI overrides" >> android/gradle.properties
-          echo "android.kotlinVersion=1.9.25" >> android/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
-          echo "kotlin.daemon.jvm.options=-Xmx2g" >> android/gradle.properties
-          echo "org.gradle.workers.max=2" >> android/gradle.properties
+          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${kotlinVersion}\")|" android/build.gradle
+          {
+            echo ""
+            echo "# CI overrides"
+            echo "android.kotlinVersion=1.9.25"
+            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
+            echo "kotlin.daemon.jvm.options=-Xmx2g"
+            echo "org.gradle.workers.max=2"
+          } >> android/gradle.properties
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
