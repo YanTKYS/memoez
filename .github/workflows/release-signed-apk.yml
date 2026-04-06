@@ -94,11 +94,19 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
-            echo "===== BUILD FAILED: compiler errors ====="
+            echo "===== BUILD FAILED: Kotlin / compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-release.log \
               | grep -v "^/" \
-              | head -100
+              | head -80
+
+            echo "===== Context around first FAILED task (50 lines before) ====="
+            FAIL_LINE=$(grep -n " FAILED$" /tmp/gradle-release.log | head -1 | cut -d: -f1)
+            if [ -n "$FAIL_LINE" ]; then
+              START=$(( FAIL_LINE > 50 ? FAIL_LINE - 50 : 1 ))
+              sed -n "${START},${FAIL_LINE}p" /tmp/gradle-release.log
+            fi
+
             echo "===== last 20 lines ====="
             tail -20 /tmp/gradle-release.log
             exit 1
