@@ -1,6 +1,6 @@
 import React, { memo, useRef, useEffect } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
-import { Text, Divider } from 'react-native-paper';
+import { Text, Divider, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { spacing } from '@/ui/theme/spacing';
 import type { DraftChecklistItem } from '@/ui/hooks/useNoteForm';
@@ -17,6 +17,7 @@ interface Props {
 export const ChecklistView = memo(function ChecklistView({
   items, lastAddedKey, onAdd, onUpdate, onToggle, onRemove,
 }: Props) {
+  const theme     = useTheme();
   const unchecked = items.filter((i) => !i.isChecked);
   const checked   = items.filter((i) =>  i.isChecked);
 
@@ -40,14 +41,14 @@ export const ChecklistView = memo(function ChecklistView({
         onPress={onAdd}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <MaterialCommunityIcons name="plus" size={18} color="#888" />
-        <Text variant="bodyMedium" style={{ color: '#888' }}>アイテムを追加</Text>
+        <MaterialCommunityIcons name="plus" size={18} color={theme.colors.onSurfaceVariant} />
+        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>アイテムを追加</Text>
       </TouchableOpacity>
 
       {checked.length > 0 && (
         <>
           <Divider style={styles.divider} />
-          <Text variant="labelSmall" style={styles.doneLabel}>
+          <Text variant="labelSmall" style={[styles.doneLabel, { color: theme.colors.onSurfaceVariant }]}>
             チェック済み ({checked.length})
           </Text>
           {checked.map((item) => (
@@ -78,17 +79,15 @@ interface RowProps {
   onToggle:     (key: string) => void;
   onRemove:     (key: string) => void;
   done?:        boolean;
-  /** true のとき、マウント後に TextInput へフォーカスを移す */
   shouldFocus?: boolean;
 }
 
 const ChecklistRow = memo(function ChecklistRow({
   itemKey, text, isChecked, onChangeText, onToggle, onRemove, done, shouldFocus,
 }: RowProps) {
+  const theme    = useTheme();
   const inputRef = useRef<TextInput>(null);
 
-  // autoFocus prop はリスト更新タイミングで発火しない場合があるため
-  // useEffect + ref で明示的にフォーカスする
   useEffect(() => {
     if (!shouldFocus) return;
     const t = setTimeout(() => inputRef.current?.focus(), 50);
@@ -104,23 +103,27 @@ const ChecklistRow = memo(function ChecklistRow({
         <MaterialCommunityIcons
           name={isChecked ? 'checkbox-marked-outline' : 'checkbox-blank-outline'}
           size={22}
-          color={isChecked ? '#999' : '#444'}
+          color={isChecked ? theme.colors.onSurfaceDisabled : theme.colors.onSurface}
         />
       </TouchableOpacity>
       <TextInput
         ref={inputRef}
-        style={[rowStyles.input, done && rowStyles.done]}
+        style={[
+          rowStyles.input,
+          { color: isChecked ? theme.colors.onSurfaceDisabled : theme.colors.onSurface },
+          done && rowStyles.done,
+        ]}
         value={text}
         onChangeText={(t) => onChangeText(itemKey, t)}
         placeholder="アイテム"
-        placeholderTextColor="#bbb"
+        placeholderTextColor={theme.colors.onSurfaceDisabled}
         multiline={false}
       />
       <TouchableOpacity
         onPress={() => onRemove(itemKey)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <MaterialCommunityIcons name="close" size={18} color="#bbb" />
+        <MaterialCommunityIcons name="close" size={18} color={theme.colors.onSurfaceVariant} />
       </TouchableOpacity>
     </View>
   );
@@ -134,8 +137,8 @@ const rowStyles = StyleSheet.create({
     paddingVertical: 6,
     minHeight:       44,
   },
-  input: { flex: 1, fontSize: 15, color: '#333' },
-  done:  { textDecorationLine: 'line-through', color: '#999' },
+  input: { flex: 1, fontSize: 15 },
+  done:  { textDecorationLine: 'line-through' },
 });
 
 const styles = StyleSheet.create({
@@ -147,6 +150,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     minHeight:       44,
   },
-  doneLabel: { color: '#888', marginBottom: spacing.xs },
+  doneLabel: { marginBottom: spacing.xs },
   divider:   { marginVertical: spacing.sm },
 });

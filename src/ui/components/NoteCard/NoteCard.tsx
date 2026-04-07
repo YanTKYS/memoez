@@ -38,7 +38,7 @@ export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = t
 
       {/* 本文 (テキストメモ) */}
       {note.type === 'TEXT' && note.content.length > 0 && (
-        <Text variant="bodySmall" style={styles.content} numberOfLines={maxLines}>
+        <Text variant="bodySmall" style={[styles.content, { color: theme.colors.onSurface }]} numberOfLines={maxLines}>
           {note.content}
         </Text>
       )}
@@ -94,6 +94,7 @@ function ChecklistPreview({
   items: Note['checklistItems'];
   maxLines: number;
 }) {
+  const theme    = useTheme();
   const visible  = items.slice(0, maxLines);
   const overflow = items.length - visible.length;
 
@@ -104,11 +105,15 @@ function ChecklistPreview({
           <MaterialCommunityIcons
             name={item.isChecked ? 'checkbox-marked-outline' : 'checkbox-blank-outline'}
             size={14}
-            color={item.isChecked ? '#999' : '#444'}
+            color={item.isChecked ? theme.colors.onSurfaceDisabled : theme.colors.onSurface}
           />
           <Text
             variant="bodySmall"
-            style={[styles.checkText, item.isChecked && styles.checkDone]}
+            style={[
+              styles.checkText,
+              { color: item.isChecked ? theme.colors.onSurfaceDisabled : theme.colors.onSurface },
+              item.isChecked && styles.checkDone,
+            ]}
             numberOfLines={1}
           >
             {item.text}
@@ -116,7 +121,7 @@ function ChecklistPreview({
         </View>
       ))}
       {overflow > 0 && (
-        <Text variant="labelSmall" style={styles.overflow}>
+        <Text variant="labelSmall" style={[styles.overflow, { color: theme.colors.onSurfaceVariant }]}>
           +{overflow}件
         </Text>
       )}
@@ -144,7 +149,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   content: {
-    color: '#444',
     lineHeight: 18,
   },
   checklist: {
@@ -157,14 +161,11 @@ const styles = StyleSheet.create({
   },
   checkText: {
     flex: 1,
-    color: '#444',
   },
   checkDone: {
     textDecorationLine: 'line-through',
-    color: '#999',
   },
   overflow: {
-    color: '#888',
     marginTop: 2,
   },
   footer: {
