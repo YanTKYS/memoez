@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Text, Button } from 'react-native-paper';
+import { Text, Button, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { spacing } from '@/ui/theme/spacing';
 
@@ -16,11 +16,12 @@ interface Props {
 }
 
 export function EmptyState({ icon, title, message, action }: Props) {
+  const theme = useTheme();
   return (
     <View style={styles.container}>
-      <MaterialCommunityIcons name={icon as any} size={64} color="#ccc" />
-      <Text variant="titleMedium" style={styles.title}>{title}</Text>
-      <Text variant="bodyMedium"  style={styles.message}>{message}</Text>
+      <MaterialCommunityIcons name={icon as any} size={64} color={theme.colors.onSurfaceDisabled} />
+      <Text variant="titleMedium" style={[styles.title, { color: theme.colors.onSurface }]}>{title}</Text>
+      <Text variant="bodyMedium"  style={[styles.message, { color: theme.colors.onSurfaceVariant }]}>{message}</Text>
       {action && (
         <Button mode="outlined" onPress={action.onPress} style={styles.button}>
           {action.label}
@@ -39,11 +40,9 @@ const styles = StyleSheet.create({
     gap:            spacing.sm,
   },
   title: {
-    color:     '#666',
     textAlign: 'center',
   },
   message: {
-    color:     '#999',
     textAlign: 'center',
   },
   button: {

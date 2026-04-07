@@ -94,7 +94,7 @@ export function LabelPickerSheet({
         <Text variant="titleSmall" style={styles.title}>ラベル</Text>
 
         <View style={[styles.inputRow, { borderColor: theme.colors.outline }]}>
-          <MaterialCommunityIcons name="label-outline" size={18} color="#888" />
+          <MaterialCommunityIcons name="label-outline" size={18} color={theme.colors.onSurfaceVariant} />
           <TextInput
             style={[styles.input, { color: theme.colors.onSurface }]}
             placeholder="ラベルを検索または作成"
@@ -133,7 +133,7 @@ export function LabelPickerSheet({
             );
           }}
           ListEmptyComponent={
-            <Text variant="bodySmall" style={styles.empty}>
+            <Text variant="bodySmall" style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>
               {newName.trim() ? '「作成」で新規ラベルを追加' : 'ラベルがありません'}
             </Text>
           }
@@ -181,7 +181,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   empty: {
-    color:     '#aaa',
     textAlign: 'center',
     padding:   spacing.md,
   },

@@ -190,7 +190,6 @@ const styles = StyleSheet.create({
     marginVertical: 0,
   },
   time: {
-    color:     '#888',
     textAlign: 'right',
     marginTop: 2,
   },

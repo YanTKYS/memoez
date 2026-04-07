@@ -151,7 +151,7 @@ export function EditNoteScreen({ noteId }: Props) {
           )}
           {saving && <ActivityIndicator size="small" style={{ marginRight: 8 }} />}
           {!saving && lastSavedAt && (
-            <Text variant="labelSmall" style={styles.savedIndicator}>保存しました</Text>
+            <Text variant="labelSmall" style={[styles.savedIndicator, { color: theme.colors.primary }]}>保存しました</Text>
           )}
         </Appbar.Header>
 
@@ -283,7 +283,6 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   savedIndicator: {
-    color:       '#4caf50',
     marginRight: spacing.sm,
   },
 });

@@ -44,7 +44,7 @@ export default function RootLayout() {
         <Text variant="titleMedium" style={styles.errTitle}>
           データベースを開けませんでした
         </Text>
-        <Text variant="bodySmall" style={styles.errDetail}>{errMsg}</Text>
+        <Text variant="bodySmall" style={[styles.errDetail, { color: theme.colors.onSurfaceVariant }]}>{errMsg}</Text>
         <Button mode="contained" onPress={init} style={styles.retryBtn}>
           再試行
         </Button>
@@ -65,6 +65,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   errTitle:  { marginBottom: 8, textAlign: 'center' },
-  errDetail: { color: '#888', textAlign: 'center', marginBottom: 24 },
+  errDetail: { textAlign: 'center', marginBottom: 24 },
   retryBtn:  { minWidth: 120 },
 });
