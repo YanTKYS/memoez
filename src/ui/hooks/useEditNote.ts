@@ -140,8 +140,13 @@ export function useEditNote(noteId?: number) {
         style: 'destructive',
         onPress: async () => {
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          if (note) await getNoteRepository().delete(note.id);
-          router.back();
+          try {
+            if (note) await getNoteRepository().delete(note.id);
+            router.back();
+          } catch (e) {
+            console.error('delete note error:', e);
+            if (mountedRef.current) setSnackMsg('削除に失敗しました');
+          }
         },
       },
     ]);
