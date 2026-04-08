@@ -56,7 +56,7 @@ jobs:
 
       # ── Expo prebuild (managed → bare) ──────────────────────────────────
       - name: Expo prebuild
-        run: npx expo prebuild --platform android --clean --no-install
+        run: npx expo prebuild --platform android --no-install
 
       # ── android/build.gradle / gradle.properties をパッチ ───────────────
       # 生成された build.gradle は kotlinVersion を ext に定義するが
