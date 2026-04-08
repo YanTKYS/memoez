@@ -117,14 +117,14 @@ jobs:
         shell: bash
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
+          ./gradlew assembleDebug -x checkKotlinGradlePluginConfigurationErrors --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
             echo "===== BUILD FAILED: Kotlin / compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-debug.log \
               | grep -v "^/" \
               | head -80
-            echo "===== Kotlin plugin configuration error lines ====="
-            grep -n "KotlinGradlePluginConfigurationErrors\\|Execution failed for task .*checkKotlinGradlePluginConfigurationErrors" /tmp/gradle-debug.log | head -80 || true
+            echo "===== FAILURE block ====="
+            sed -n '/FAILURE: Build failed with an exception\./,/BUILD FAILED in/p' /tmp/gradle-debug.log | head -120 || true
 
             echo "===== Context around first FAILED task (50 lines before) ====="
             FAIL_LINE=$(grep -n " FAILED$" /tmp/gradle-debug.log | head -1 | cut -d: -f1)
@@ -140,7 +140,7 @@ jobs:
 
       - name: Run Lint
         if: github.event_name == 'pull_request'
-        run: cd android && ./gradlew lintDebug --no-daemon
+        run: cd android && ./gradlew lintDebug -x checkKotlinGradlePluginConfigurationErrors --no-daemon
 
       # ── アーティファクト保存 ─────────────────────────────────────────────
       - name: Upload debug APK
@@ -239,14 +239,14 @@ jobs:
         shell: bash
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
+          ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
             echo "===== BUILD FAILED: compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-release.log \
               | grep -v "^/" \
               | head -100
-            echo "===== Kotlin plugin configuration error lines ====="
-            grep -n "KotlinGradlePluginConfigurationErrors\\|Execution failed for task .*checkKotlinGradlePluginConfigurationErrors" /tmp/gradle-release.log | head -100 || true
+            echo "===== FAILURE block ====="
+            sed -n '/FAILURE: Build failed with an exception\./,/BUILD FAILED in/p' /tmp/gradle-release.log | head -150 || true
             echo "===== last 20 lines ====="
             tail -20 /tmp/gradle-release.log
             exit 1

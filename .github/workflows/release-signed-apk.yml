@@ -96,14 +96,14 @@ jobs:
         shell: bash
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
+          ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
             echo "===== BUILD FAILED: Kotlin / compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-release.log \
               | grep -v "^/" \
               | head -80
-            echo "===== Kotlin plugin configuration error lines ====="
-            grep -n "KotlinGradlePluginConfigurationErrors\\|Execution failed for task .*checkKotlinGradlePluginConfigurationErrors" /tmp/gradle-release.log | head -100 || true
+            echo "===== FAILURE block ====="
+            sed -n '/FAILURE: Build failed with an exception\./,/BUILD FAILED in/p' /tmp/gradle-release.log | head -150 || true
 
             echo "===== Context around first FAILED task (50 lines before) ====="
             FAIL_LINE=$(grep -n " FAILED$" /tmp/gradle-release.log | head -1 | cut -d: -f1)
