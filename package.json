@@ -8,8 +8,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "generate": "drizzle-kit generate",
-    "lint": "eslint . --ext .ts,.tsx",
-    "test": "jest --watchAll=false --passWithNoTests"
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .ts,.tsx",
+    "test": "jest --watchAll=false"
   },
   "dependencies": {
     "expo": "~52.0.0",
