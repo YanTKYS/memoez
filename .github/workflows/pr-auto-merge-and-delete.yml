@@ -1,0 +1,29 @@
+name: PR Auto Merge and Delete Branch
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+    branches: [main]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Automerge conflict-free PRs and delete merged branch
+        uses: pascalgn/automerge-action@v0.16.4
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          MERGE_METHOD: "squash"
+          MERGE_DELETE_BRANCH: "true"
+          MERGE_RETRY_SLEEP: "60000"
+          MERGE_REQUIRED_APPROVALS: "0"
+          MERGE_LABELS: ""
+          MERGE_FORKS: "false"
