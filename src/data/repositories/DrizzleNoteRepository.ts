@@ -178,7 +178,7 @@ export class DrizzleNoteRepository implements INoteRepository {
     await this.db
       .update(notes)
       .set(patch)
-      .where(eq(notes.id, id));
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)));
 
     const note = await this.findById(id);
     if (!note) throw new Error(`Note ${id} not found after update`);
@@ -186,26 +186,34 @@ export class DrizzleNoteRepository implements INoteRepository {
   }
 
   async togglePin(id: number): Promise<Note> {
-    const rows = await this.db.select().from(notes).where(eq(notes.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)))
+      .limit(1);
     const row = rows[0];
     if (!row) throw new Error(`Note ${id} not found`);
     await this.db
       .update(notes)
       .set({ isPinned: !row.isPinned, updatedAt: new Date() })
-      .where(eq(notes.id, id));
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)));
     const updated = await this.findById(id);
     if (!updated) throw new Error(`Note ${id} not found after togglePin`);
     return updated;
   }
 
   async toggleArchive(id: number): Promise<Note> {
-    const rows = await this.db.select().from(notes).where(eq(notes.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)))
+      .limit(1);
     const row = rows[0];
     if (!row) throw new Error(`Note ${id} not found`);
     await this.db
       .update(notes)
       .set({ isArchived: !row.isArchived, updatedAt: new Date() })
-      .where(eq(notes.id, id));
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)));
     const updated = await this.findById(id);
     if (!updated) throw new Error(`Note ${id} not found after toggleArchive`);
     return updated;
@@ -219,7 +227,7 @@ export class DrizzleNoteRepository implements INoteRepository {
     await this.db
       .update(notes)
       .set({ deletedAt: new Date() })
-      .where(eq(notes.id, id));
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)));
     // 将来の同期拡張ポイント:
     // deletedAt が設定されたレコードは syncPendingChanges() で
     // サーバーに DELETE リクエストを送信し、応答後に hardDelete() する
@@ -270,10 +278,14 @@ export class DrizzleNoteRepository implements INoteRepository {
       await tx
         .update(notes)
         .set({ updatedAt: now })
-        .where(eq(notes.id, noteId));
+        .where(and(eq(notes.id, noteId), isNull(notes.deletedAt)));
     });
 
-    const rows = await this.db.select().from(notes).where(eq(notes.id, noteId)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, noteId), isNull(notes.deletedAt)))
+      .limit(1);
     if (!rows[0]) throw new Error(`Note ${noteId} not found after updateChecklistItems`);
     const hydrated = await this.hydrateNotes(rows);
     return hydrated[0]!;
