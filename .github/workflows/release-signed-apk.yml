@@ -98,7 +98,7 @@ jobs:
         shell: bash
         run: |
           cd android
-          ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
+          ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
             echo "===== BUILD FAILED: Kotlin / compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-release.log \
