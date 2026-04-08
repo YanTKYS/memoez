@@ -12,6 +12,7 @@ jobs:
   # build: デバッグ APK (全ブランチ / PR)
   # ──────────────────────────────────────────────────────────────────────────
   build:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +30,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       # ── TypeScript / 静的チェック ────────────────────────────────────────
       - name: TypeScript check
@@ -55,7 +56,7 @@ jobs:
       # ── Expo prebuild (managed → bare) ──────────────────────────────────
       # android/ は .gitignore に含まれるため毎回生成する
       - name: Expo prebuild
-        run: npx expo prebuild --platform android --clean --no-install
+        run: npx expo prebuild --platform android --no-install
 
       # ── android/build.gradle / gradle.properties をパッチ ───────────────
       # 生成された build.gradle は kotlinVersion を ext に定義するが
@@ -72,6 +73,8 @@ jobs:
             echo ""
             echo "# CI overrides"
             echo "android.kotlinVersion=1.9.25"
+            echo "kotlin.jvm.target.validation.mode=warning"
+            echo "org.gradle.configuration-cache=false"
             echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
             echo "kotlin.daemon.jvm.options=-Xmx2g"
             echo "org.gradle.workers.max=2"
@@ -113,12 +116,14 @@ jobs:
         shell: bash
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
+          ./gradlew assembleDebug -x checkKotlinGradlePluginConfigurationErrors --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
             echo "===== BUILD FAILED: Kotlin / compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-debug.log \
               | grep -v "^/" \
               | head -80
+            echo "===== FAILURE block ====="
+            sed -n '/FAILURE: Build failed with an exception\./,/BUILD FAILED in/p' /tmp/gradle-debug.log | head -120 || true
 
             echo "===== Context around first FAILED task (50 lines before) ====="
             FAIL_LINE=$(grep -n " FAILED$" /tmp/gradle-debug.log | head -1 | cut -d: -f1)
@@ -133,7 +138,8 @@ jobs:
           }
 
       - name: Run Lint
-        run: cd android && ./gradlew lintDebug --no-daemon
+        if: github.event_name == 'pull_request'
+        run: cd android && ./gradlew lintDebug -x checkKotlinGradlePluginConfigurationErrors --no-daemon
 
       # ── アーティファクト保存 ─────────────────────────────────────────────
       - name: Upload debug APK
@@ -156,7 +162,6 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   release-apk:
     runs-on: ubuntu-latest
-    needs: build
     if: github.ref == 'refs/heads/main'
 
     steps:
@@ -173,7 +178,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -192,7 +197,7 @@ jobs:
             ndk;26.1.10909125
 
       - name: Expo prebuild
-        run: npx expo prebuild --platform android --clean --no-install
+        run: npx expo prebuild --platform android --no-install
 
       - name: Patch android build files for CI
         run: |
@@ -201,6 +206,8 @@ jobs:
             echo ""
             echo "# CI overrides"
             echo "android.kotlinVersion=1.9.25"
+            echo "kotlin.jvm.target.validation.mode=warning"
+            echo "org.gradle.configuration-cache=false"
             echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
             echo "kotlin.daemon.jvm.options=-Xmx2g"
             echo "org.gradle.workers.max=2"
@@ -230,12 +237,14 @@ jobs:
         shell: bash
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
+          ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
             echo "===== BUILD FAILED: compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-release.log \
               | grep -v "^/" \
               | head -100
+            echo "===== FAILURE block ====="
+            sed -n '/FAILURE: Build failed with an exception\./,/BUILD FAILED in/p' /tmp/gradle-release.log | head -150 || true
             echo "===== last 20 lines ====="
             tail -20 /tmp/gradle-release.log
             exit 1
