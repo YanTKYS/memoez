@@ -35,7 +35,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       # ── JDK / Android SDK ───────────────────────────────────────────────
       - name: Set up JDK 17

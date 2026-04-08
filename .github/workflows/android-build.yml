@@ -29,7 +29,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       # ── TypeScript / 静的チェック ────────────────────────────────────────
       - name: TypeScript check
@@ -173,7 +173,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
