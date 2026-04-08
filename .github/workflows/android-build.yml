@@ -123,6 +123,8 @@ jobs:
               /tmp/gradle-debug.log \
               | grep -v "^/" \
               | head -80
+            echo "===== Kotlin plugin configuration error lines ====="
+            grep -n "KotlinGradlePluginConfigurationErrors\\|Execution failed for task .*checkKotlinGradlePluginConfigurationErrors" /tmp/gradle-debug.log | head -80 || true
 
             echo "===== Context around first FAILED task (50 lines before) ====="
             FAIL_LINE=$(grep -n " FAILED$" /tmp/gradle-debug.log | head -1 | cut -d: -f1)
@@ -243,6 +245,8 @@ jobs:
               /tmp/gradle-release.log \
               | grep -v "^/" \
               | head -100
+            echo "===== Kotlin plugin configuration error lines ====="
+            grep -n "KotlinGradlePluginConfigurationErrors\\|Execution failed for task .*checkKotlinGradlePluginConfigurationErrors" /tmp/gradle-release.log | head -100 || true
             echo "===== last 20 lines ====="
             tail -20 /tmp/gradle-release.log
             exit 1
