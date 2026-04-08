@@ -35,7 +35,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       # ── JDK / Android SDK ───────────────────────────────────────────────
       - name: Set up JDK 17
@@ -56,7 +56,7 @@ jobs:
 
       # ── Expo prebuild (managed → bare) ──────────────────────────────────
       - name: Expo prebuild
-        run: npx expo prebuild --platform android --clean --no-install
+        run: npx expo prebuild --platform android --no-install
 
       # ── android/build.gradle / gradle.properties をパッチ ───────────────
       # 生成された build.gradle は kotlinVersion を ext に定義するが
@@ -99,6 +99,8 @@ jobs:
               /tmp/gradle-release.log \
               | grep -v "^/" \
               | head -80
+            echo "===== Kotlin plugin configuration error lines ====="
+            grep -n "KotlinGradlePluginConfigurationErrors\\|Execution failed for task .*checkKotlinGradlePluginConfigurationErrors" /tmp/gradle-release.log | head -100 || true
 
             echo "===== Context around first FAILED task (50 lines before) ====="
             FAIL_LINE=$(grep -n " FAILED$" /tmp/gradle-release.log | head -1 | cut -d: -f1)
