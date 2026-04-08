@@ -1,0 +1,137 @@
+name: PR Auto Merge and Delete Branch
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find candidate PR
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            let pr = null;
+
+            if (context.eventName === 'pull_request_target') {
+              pr = context.payload.pull_request;
+            } else if (context.eventName === 'check_suite') {
+              const pulls = context.payload.check_suite?.pull_requests ?? [];
+              pr = pulls.find((p) => p.base.ref === 'main') ?? null;
+              if (pr) {
+                const { data } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                });
+                pr = data;
+              }
+            }
+
+            if (!pr) {
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            core.setOutput('found', 'true');
+            core.setOutput('number', String(pr.number));
+            core.setOutput('sha', pr.head.sha);
+            core.setOutput('draft', String(Boolean(pr.draft)));
+            core.setOutput('mergeable', String(pr.mergeable));
+            core.setOutput('head_ref', pr.head.ref);
+            core.setOutput('same_repo', String(pr.head.repo.full_name === context.repo.owner + '/' + context.repo.repo));
+
+      - name: Merge PR when checks are green and no conflicts
+        if: >
+          steps.pr.outputs.found == 'true' &&
+          steps.pr.outputs.draft != 'true' &&
+          steps.pr.outputs.mergeable != 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pull_number = Number('${{ steps.pr.outputs.number }}');
+            const ref = '${{ steps.pr.outputs.sha }}';
+
+            const checks = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref,
+              per_page: 100,
+            });
+            const checkRuns = checks.data.check_runs || [];
+            const allChecksDone = checkRuns.every((c) => c.status === 'completed');
+            const allChecksSuccess = checkRuns.every((c) => c.conclusion === 'success' || c.conclusion === 'skipped' || c.conclusion === 'neutral');
+
+            const status = await github.rest.repos.getCombinedStatusForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref,
+            });
+            const statusSuccess = status.data.state === 'success';
+
+            if (!allChecksDone || !allChecksSuccess || !statusSuccess) {
+              core.info(`Skip merge for PR #${pull_number}: checks/status not green yet.`);
+              return;
+            }
+
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number,
+                merge_method: 'squash',
+              });
+              core.info(`Merged PR #${pull_number}`);
+            } catch (e) {
+              core.warning(`Merge skipped for PR #${pull_number}: ${e.message}`);
+            }
+
+      - name: Delete merged branch
+        if: >
+          steps.pr.outputs.found == 'true' &&
+          steps.pr.outputs.same_repo == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pull_number = Number('${{ steps.pr.outputs.number }}');
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+            });
+
+            if (!pr.merged) {
+              core.info(`PR #${pull_number} is not merged; skip branch deletion.`);
+              return;
+            }
+
+            const defaultBranch = context.payload.repository.default_branch;
+            if (pr.head.ref === defaultBranch) {
+              core.info(`Skip delete: head is default branch (${defaultBranch}).`);
+              return;
+            }
+
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${pr.head.ref}`,
+              });
+              core.info(`Deleted merged branch: ${pr.head.ref}`);
+            } catch (e) {
+              core.warning(`Branch delete skipped for ${pr.head.ref}: ${e.message}`);
+            }
