@@ -21,8 +21,8 @@
 - [ ] `package-lock.json` の `version` と root package version が `0.1.4` で一致
 
 ## 2. ローカル事前確認（必須）
-- [ ] 依存関係インストール
-  - [ ] `npm install --no-audit --no-fund`
+- [x] 依存関係インストール
+  - [x] `npm install --no-audit --no-fund`（2026-04-09 実施）
 - [ ] 型チェック
   - [ ] `npx tsc --noEmit`
 - [ ] テスト
