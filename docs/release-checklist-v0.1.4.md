@@ -25,8 +25,8 @@
   - [x] `npm install --no-audit --no-fund`（2026-04-09 実施）
 - [x] 型チェック
   - [x] `npx tsc --noEmit`（2026-04-09 実施）
-- [ ] テスト
-  - [ ] `npm test`
+- [x] テスト
+  - [x] `npm test`（2026-04-09 実施）
 - [ ] lint
   - [ ] `npm run lint`
 
