@@ -23,8 +23,8 @@
 ## 2. ローカル事前確認（必須）
 - [x] 依存関係インストール
   - [x] `npm install --no-audit --no-fund`（2026-04-09 実施）
-- [ ] 型チェック
-  - [ ] `npx tsc --noEmit`
+- [x] 型チェック
+  - [x] `npx tsc --noEmit`（2026-04-09 実施）
 - [ ] テスト
   - [ ] `npm test`
 - [ ] lint
