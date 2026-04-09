@@ -37,7 +37,7 @@
   - [ ] `android/app/build/outputs/apk/release/app-release-unsigned.apk` が存在
 
 ## 4. GitHub Actions リリース実行
-- [ ] `main` に push 後、`Android Build` ワークフローが成功
+- [x] `main` に push 後、`Android Build` ワークフローが成功（2026-04-09 確認済み）
 - [ ] タグ作成: `v0.1.4`
 - [ ] `Release Signed APK` ワークフローが成功
 - [ ] GitHub Release に APK が添付されている
