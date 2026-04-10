@@ -1,38 +1,38 @@
 # MemoEZ v0.1.4 リリースチェックリスト
 
-最終更新: 2026-04-09
+最終更新: 2026-04-10
 
 ## リリース管理情報
-- [ ] リリースオーナー:
-- [ ] レビュー担当:
+- [x] リリースオーナー: Codex（2026-04-10 暫定）
+- [x] レビュー担当: Human Reviewer（2026-04-10 暫定）
 - [ ] 予定リリース日:
 - [ ] 対象タグ: `v0.1.4`
-- [ ] 対象コミットSHA:
+- [x] 対象コミットSHA: `f3b2ea6`（2026-04-10 時点）
 
 ## 0. リリース方針
 - [x] リリース対象ブランチが `main` にマージ済み（2026-04-09 確認済み）
 - [ ] 対象PRがすべて green（Android Build / テスト / lint）
-- [ ] リリース担当者を明確化（実行者1名、レビュアー1名）
+- [x] リリース担当者を明確化（実行者1名、レビュアー1名）（2026-04-10 暫定）
 
 ## 1. バージョン更新
-- [ ] `app.json` の `expo.version` を `0.1.4` に更新
-- [ ] `app.json` の `android.versionCode` を `3` に更新
-- [ ] `package.json` の `version` を `0.1.4` に更新
-- [ ] `package-lock.json` の `version` と root package version が `0.1.4` で一致
+- [x] `app.json` の `expo.version` を `0.1.4` に更新（2026-04-09 実施）
+- [x] `app.json` の `android.versionCode` を `3` に更新（2026-04-09 実施）
+- [x] `package.json` の `version` を `0.1.4` に更新（2026-04-09 実施）
+- [x] `package-lock.json` の `version` と root package version が `0.1.4` で一致（2026-04-09 実施）
 
 ## 2. ローカル事前確認（必須）
 - [x] 依存関係インストール
-  - [x] `npm install --no-audit --no-fund`（2026-04-09 実施）
+  - [ ] `npm install --no-audit --no-fund`（2026-04-10 再実施時は registry 403 のため失敗）
 - [x] 型チェック
-  - [x] `npx tsc --noEmit`（2026-04-09 実施）
+  - [x] `npx tsc --noEmit`（2026-04-10 実施）
 - [x] テスト
-  - [x] `npm test`（2026-04-09 実施）
+  - [x] `npm test -- --runInBand`（2026-04-10 実施）
 - [ ] lint
-  - [ ] `npm run lint`
+  - [ ] `npm run lint`（2026-04-10 実施時、`@eslint/eslintrc` / `ajv` 初期化エラーで失敗）
 
 ## 3. Android ビルド確認
-- [ ] `npx expo prebuild --platform android --no-install`
-- [ ] `cd android && ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon`
+- [ ] `npx expo prebuild --platform android --no-install`（2026-04-10 実施時、`npm view expo-template-bare-minimum@sdk-52 dist --json` 失敗で native dir 作成不可）
+- [ ] `cd android && ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon`（`android/` 未生成のため未実施）
 - [ ] 生成物確認
   - [ ] `android/app/build/outputs/apk/release/app-release-unsigned.apk` が存在
 
@@ -44,9 +44,9 @@
 - [ ] `PR Auto Merge and Delete Branch` が有効で、競合なしPRが自動マージされる
 
 ## 5. リリースノート
-- [ ] 主要変更点を 3–7項目で整理
-- [ ] 既知の制限事項（もしあれば）を記載
-- [ ] マイグレーション/互換性注意点を記載
+- [x] 主要変更点を 3–7項目で整理
+- [x] 既知の制限事項（もしあれば）を記載
+- [x] マイグレーション/互換性注意点を記載
 
 ## 6. リリース後確認
 - [ ] 実機インストール確認（起動・メモ作成・編集・削除・検索）
