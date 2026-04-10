@@ -18,6 +18,6 @@
 
 
 ## リリース作業メモ（2026-04-10）
-- `npm run lint` は `@eslint/eslintrc` / `ajv` 初期化エラーで失敗（依存解決の再実施が必要）。
-- `npx expo prebuild --platform android --no-install` は `expo-template-bare-minimum@sdk-52` の取得失敗で中断。
+- `npm run lint` は 2026-04-10 再実行で成功（warningのみ、errorなし）。
+- `npx expo prebuild --platform android --no-install` は `npm view expo-template-bare-minimum@sdk-52 dist --json` の registry 403 失敗で中断。
 - そのため、実機テスト前に Android ローカル release ビルド確認の再実行が必要。

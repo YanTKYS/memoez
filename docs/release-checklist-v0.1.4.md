@@ -3,16 +3,16 @@
 最終更新: 2026-04-10
 
 ## リリース管理情報
-- [x] リリースオーナー: Codex（2026-04-10 暫定）
-- [x] レビュー担当: Human Reviewer（2026-04-10 暫定）
+- [ ] リリースオーナー:
+- [ ] レビュー担当:
 - [ ] 予定リリース日:
 - [ ] 対象タグ: `v0.1.4`
-- [x] 対象コミットSHA: `f3b2ea6`（2026-04-10 時点）
+- [ ] 対象コミットSHA:
 
 ## 0. リリース方針
 - [x] リリース対象ブランチが `main` にマージ済み（2026-04-09 確認済み）
 - [ ] 対象PRがすべて green（Android Build / テスト / lint）
-- [x] リリース担当者を明確化（実行者1名、レビュアー1名）（2026-04-10 暫定）
+- [ ] リリース担当者を明確化（実行者1名、レビュアー1名）
 
 ## 1. バージョン更新
 - [x] `app.json` の `expo.version` を `0.1.4` に更新（2026-04-09 実施）
@@ -22,19 +22,24 @@
 
 ## 2. ローカル事前確認（必須）
 - [x] 依存関係インストール
-  - [ ] `npm install --no-audit --no-fund`（2026-04-10 再実施時は registry 403 のため失敗）
+  - [x] `npm install --no-audit --no-fund`（2026-04-09 実施）
 - [x] 型チェック
   - [x] `npx tsc --noEmit`（2026-04-10 実施）
 - [x] テスト
   - [x] `npm test -- --runInBand`（2026-04-10 実施）
-- [ ] lint
-  - [ ] `npm run lint`（2026-04-10 実施時、`@eslint/eslintrc` / `ajv` 初期化エラーで失敗）
+- [x] lint
+  - [x] `npm run lint`（2026-04-10 実施 / warningのみ）
 
 ## 3. Android ビルド確認
 - [ ] `npx expo prebuild --platform android --no-install`（2026-04-10 実施時、`npm view expo-template-bare-minimum@sdk-52 dist --json` 失敗で native dir 作成不可）
 - [ ] `cd android && ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon`（`android/` 未生成のため未実施）
 - [ ] 生成物確認
   - [ ] `android/app/build/outputs/apk/release/app-release-unsigned.apk` が存在
+
+
+## 実機テスト前ブロッカー（2026-04-10）
+- `npm view expo-template-bare-minimum@sdk-52 dist --json` が registry 403 で失敗し、`expo prebuild` が完了しない。
+- そのため `android/` が生成されず、`./gradlew assembleRelease` と APK 生成確認を継続できない。
 
 ## 4. GitHub Actions リリース実行
 - [x] `main` に push 後、`Android Build` ワークフローが成功（2026-04-09 確認済み）
