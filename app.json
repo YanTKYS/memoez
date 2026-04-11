@@ -2,7 +2,7 @@
   "expo": {
     "name": "MemoEZ",
     "slug": "memoez",
-    "version": "0.1.4",
+    "version": "0.1.4-beta",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.memoez.app"
@@ -22,7 +24,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.memoez.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "softwareKeyboardLayoutMode": "pan"
     },
     "plugins": [
