@@ -21,3 +21,8 @@
 - `npm run lint` は 2026-04-10 再実行で成功（warningのみ、errorなし）。
 - `npx expo prebuild --platform android --no-install` は `npm view expo-template-bare-minimum@sdk-52 dist --json` の registry 403 失敗で中断。
 - そのため、実機テスト前に Android ローカル release ビルド確認の再実行が必要。
+
+
+### 実機テスト開始条件
+- `android/` 生成 (`expo prebuild`) が成功していること。
+- `app-release-unsigned.apk` 生成を確認してから実機テストに進むこと。

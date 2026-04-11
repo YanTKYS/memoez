@@ -41,6 +41,14 @@
 - `npm view expo-template-bare-minimum@sdk-52 dist --json` が registry 403 で失敗し、`expo prebuild` が完了しない。
 - そのため `android/` が生成されず、`./gradlew assembleRelease` と APK 生成確認を継続できない。
 
+
+## 実機テストまでの未完了項目（対応手順）
+1. npm レジストリアクセス制限を解除後、`npm view expo-template-bare-minimum@sdk-52 dist --json` が成功することを確認。
+2. `npx expo prebuild --platform android --no-install` を再実行して `android/` を生成。
+3. `cd android && ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon` を実行。
+4. `android/app/build/outputs/apk/release/app-release-unsigned.apk` の存在を確認。
+5. APK を実機にインストールし、セクション6の確認項目（起動/メモ/ラベル/SQLite）を消化。
+
 ## 4. GitHub Actions リリース実行
 - [x] `main` に push 後、`Android Build` ワークフローが成功（2026-04-09 確認済み）
 - [ ] タグ作成: `v0.1.4`
