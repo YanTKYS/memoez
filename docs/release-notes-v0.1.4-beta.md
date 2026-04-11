@@ -18,11 +18,11 @@
 
 
 ## リリース作業メモ（2026-04-11）
-- `npm run lint` は 2026-04-11 実行時に `@eslint/eslintrc` / `ajv` 初期化エラーで失敗。
-- `npx expo prebuild --platform android --no-install` は `npm view expo-template-bare-minimum@sdk-52 dist --json` の registry 403 失敗で中断。
-- そのため、実機テスト前に Android ローカル release ビルド確認の再実行が必要。
+- `npm run lint` は再実行で成功（warningのみ、errorなし）。
+- ローカルAPKビルドが成功し、`android/app/build/outputs/apk/release/app-release-unsigned.apk` を確認。
+- 実機テストフェーズへ移行可能。
 
 
 ### 実機テスト開始条件
-- `android/` 生成 (`expo prebuild`) が成功していること。
-- `app-release-unsigned.apk` 生成を確認してから実機テストに進むこと。
+- `android/` 生成 (`expo prebuild`) が成功していること（完了）。
+- `app-release-unsigned.apk` 生成を確認してから実機テストに進むこと（完了）。
