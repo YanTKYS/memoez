@@ -50,7 +50,11 @@ export function LabelPickerSheet({
       await onToggleLabel(item, attached);
       setSelected((s) => {
         const next = new Set(s);
-        attached ? next.delete(item.id) : next.add(item.id);
+        if (attached) {
+          next.delete(item.id);
+        } else {
+          next.add(item.id);
+        }
         return next;
       });
     } catch {
@@ -77,9 +81,7 @@ export function LabelPickerSheet({
     }
   };
 
-  const filtered = allLabels.filter(
-    (l) => !newName.trim() || l.name.includes(newName.trim()),
-  );
+  const displayedLabels = allLabels;
 
   return (
     <Portal>
@@ -97,7 +99,7 @@ export function LabelPickerSheet({
           <MaterialCommunityIcons name="label-outline" size={18} color={theme.colors.onSurfaceVariant} />
           <TextInput
             style={[styles.input, { color: theme.colors.onSurface }]}
-            placeholder="ラベルを検索または作成"
+            placeholder="新しいラベル名を入力"
             placeholderTextColor={theme.colors.onSurfaceDisabled}
             value={newName}
             onChangeText={setNewName}
@@ -118,7 +120,7 @@ export function LabelPickerSheet({
         <Divider style={{ marginVertical: spacing.sm }} />
 
         <FlatList
-          data={filtered}
+          data={displayedLabels}
           keyExtractor={(item) => String(item.id)}
           style={{ maxHeight: 300 }}
           renderItem={({ item }) => {
@@ -140,7 +142,7 @@ export function LabelPickerSheet({
           }}
           ListEmptyComponent={
             <Text variant="bodySmall" style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>
-              {newName.trim() ? '「作成」で新規ラベルを追加' : 'ラベルがありません'}
+              {'ラベルがありません'}
             </Text>
           }
         />
