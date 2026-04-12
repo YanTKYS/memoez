@@ -4,8 +4,6 @@ on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
     branches: [main]
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
