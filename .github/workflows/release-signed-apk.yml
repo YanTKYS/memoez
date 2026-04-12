@@ -27,6 +27,26 @@ jobs:
         with:
           fetch-depth: 0
 
+
+      - name: Ensure release tag exists (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag_name }}"
+          if [ -z "$TAG_NAME" ]; then
+            echo "ERROR: tag_name is required for workflow_dispatch" >&2
+            exit 1
+          fi
+
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            echo "Tag already exists: $TAG_NAME"
+          else
+            git tag "$TAG_NAME" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG_NAME"
+            echo "Created and pushed tag: $TAG_NAME"
+          fi
+
       # ── Node.js ─────────────────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
