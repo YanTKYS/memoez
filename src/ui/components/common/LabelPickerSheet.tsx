@@ -101,12 +101,18 @@ export function LabelPickerSheet({
             placeholderTextColor={theme.colors.onSurfaceDisabled}
             value={newName}
             onChangeText={setNewName}
+            returnKeyType="done"
+            onSubmitEditing={createLabel}
+            blurOnSubmit={false}
           />
-          {newName.trim().length > 0 && (
-            <Button compact loading={creating} onPress={createLabel}>
-              作成
-            </Button>
-          )}
+          <Button
+            compact
+            loading={creating}
+            onPress={createLabel}
+            disabled={creating || newName.trim().length === 0}
+          >
+            作成
+          </Button>
         </View>
 
         <Divider style={{ marginVertical: spacing.sm }} />
