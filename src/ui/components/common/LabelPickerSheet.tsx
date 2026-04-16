@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, Portal, Modal, Checkbox, Divider, Button, Snackbar, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Label } from '@/domain/entities/Label';
@@ -13,19 +13,17 @@ interface Props {
   onFetchLabels:  () => Promise<Label[]>;
   /** ラベルのアタッチ/デタッチを切り替える（呼び出し元で楽観的更新済み） */
   onToggleLabel:  (label: Label, currentlyAttached: boolean) => Promise<void>;
-  /** 新規ラベルを作成してアタッチする */
-  onCreateLabel:  (name: string) => Promise<Label>;
+  /** ラベル管理画面を開く（作成/編集は管理画面で実施） */
+  onOpenLabelManager: () => void;
 }
 
 export function LabelPickerSheet({
   visible, currentLabels, onDismiss,
-  onFetchLabels, onToggleLabel, onCreateLabel,
+  onFetchLabels, onToggleLabel, onOpenLabelManager,
 }: Props) {
   const theme = useTheme();
   const [allLabels,  setAllLabels]  = useState<Label[]>([]);
   const [selected,   setSelected]   = useState<Set<number>>(new Set());
-  const [newName,    setNewName]     = useState('');
-  const [creating,   setCreating]   = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [errMsg,     setErrMsg]     = useState('');
 
@@ -64,25 +62,6 @@ export function LabelPickerSheet({
     }
   };
 
-  // ─── 新規ラベル作成 ───────────────────────────────────────────────────────
-  const createLabel = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    setCreating(true);
-    try {
-      const label = await onCreateLabel(name);
-      setAllLabels((ls) => [...ls, label]);
-      setSelected((s) => new Set([...s, label.id]));
-      setNewName('');
-    } catch {
-      setErrMsg('ラベルの作成に失敗しました');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const displayedLabels = allLabels;
-
   return (
     <Portal>
       <Modal
@@ -94,33 +73,22 @@ export function LabelPickerSheet({
         ]}
       >
         <Text variant="titleSmall" style={styles.title}>ラベル</Text>
-
-        <View style={[styles.inputRow, { borderColor: theme.colors.outline }]}>
-          <MaterialCommunityIcons name="label-outline" size={18} color={theme.colors.onSurfaceVariant} />
-          <TextInput
-            style={[styles.input, { color: theme.colors.onSurface }]}
-            placeholder="新しいラベル名を入力"
-            placeholderTextColor={theme.colors.onSurfaceDisabled}
-            value={newName}
-            onChangeText={setNewName}
-            returnKeyType="done"
-            onSubmitEditing={createLabel}
-            blurOnSubmit={false}
-          />
-          <Button
-            compact
-            loading={creating}
-            onPress={createLabel}
-            disabled={creating || newName.trim().length === 0}
-          >
-            作成
+        <View style={styles.manageRow}>
+          <MaterialCommunityIcons name="information-outline" size={16} color={theme.colors.onSurfaceVariant} />
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            ラベルの作成/編集はラベル管理画面で行ってください
+          </Text>
+        </View>
+        <View style={styles.manageButtonRow}>
+          <Button mode="outlined" onPress={onOpenLabelManager}>
+            ラベル管理画面へ
           </Button>
         </View>
 
         <Divider style={{ marginVertical: spacing.sm }} />
 
         <FlatList
-          data={displayedLabels}
+          data={allLabels}
           keyExtractor={(item) => String(item.id)}
           style={{ maxHeight: 300 }}
           renderItem={({ item }) => {
@@ -166,18 +134,14 @@ const styles = StyleSheet.create({
     padding:      spacing.md,
   },
   title:    { marginBottom: spacing.sm },
-  inputRow: {
+  manageRow: {
     flexDirection:     'row',
     alignItems:        'center',
     gap:               spacing.sm,
-    borderWidth:       1,
-    borderRadius:      8,
-    paddingHorizontal: spacing.sm,
   },
-  input: {
-    flex:     1,
-    height:   44,
-    fontSize: 14,
+  manageButtonRow: {
+    marginTop: spacing.xs,
+    alignItems: 'flex-start',
   },
   row: {
     flexDirection:   'row',
