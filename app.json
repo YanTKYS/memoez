@@ -2,7 +2,7 @@
   "expo": {
     "name": "MemoEZ",
     "slug": "memoez",
-    "version": "0.1.4-beta",
+    "version": "0.1.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -24,7 +24,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.memoez.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "softwareKeyboardLayoutMode": "pan"
     },
     "plugins": [

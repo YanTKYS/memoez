@@ -1,6 +1,6 @@
 # MemoEZ v0.1.4 リリースチェックリスト
 
-最終更新: 2026-04-10
+最終更新: 2026-04-16
 
 ## リリース管理情報
 - [ ] リリースオーナー:
@@ -15,39 +15,30 @@
 - [ ] リリース担当者を明確化（実行者1名、レビュアー1名）
 
 ## 1. バージョン更新
-- [x] `app.json` の `expo.version` を `0.1.4` に更新（2026-04-09 実施）
-- [x] `app.json` の `android.versionCode` を `3` に更新（2026-04-09 実施）
-- [x] `package.json` の `version` を `0.1.4` に更新（2026-04-09 実施）
-- [x] `package-lock.json` の `version` と root package version が `0.1.4` で一致（2026-04-09 実施）
+- [x] `app.json` の `expo.version` を `0.1.4` に更新（2026-04-16 実施）
+- [x] `app.json` の `android.versionCode` を `5` に更新（2026-04-16 実施）
+- [x] `package.json` の `version` を `0.1.4` に更新（2026-04-16 実施）
+- [x] `package-lock.json` の `version` と root package version が `0.1.4` で一致（2026-04-16 実施）
 
 ## 2. ローカル事前確認（必須）
 - [x] 依存関係インストール
-  - [x] `npm install --no-audit --no-fund`（2026-04-09 実施）
+  - [x] `npm install --no-audit --no-fund`（2026-04-16 実施）
 - [x] 型チェック
-  - [x] `npx tsc --noEmit`（2026-04-10 実施）
+  - [x] `npx tsc --noEmit`（2026-04-16 実施）
 - [x] テスト
-  - [x] `npm test -- --runInBand`（2026-04-10 実施）
+  - [x] `npm test -- --runInBand`（2026-04-16 実施）
 - [x] lint
-  - [x] `npm run lint`（2026-04-10 実施 / warningのみ）
+  - [x] `npm run lint`（2026-04-11 再実施 / warningのみ）
 
 ## 3. Android ビルド確認
-- [ ] `npx expo prebuild --platform android --no-install`（2026-04-10 実施時、`npm view expo-template-bare-minimum@sdk-52 dist --json` 失敗で native dir 作成不可）
-- [ ] `cd android && ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon`（`android/` 未生成のため未実施）
-- [ ] 生成物確認
-  - [ ] `android/app/build/outputs/apk/release/app-release-unsigned.apk` が存在
+- [x] `npx expo prebuild --platform android --no-install`（2026-04-11 ビルド成功時点で完了）
+- [x] `cd android && ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon`（2026-04-11 ビルド成功）
+- [x] 生成物確認
+  - [x] `android/app/build/outputs/apk/release/app-release-unsigned.apk` が存在（2026-04-11 確認）
 
 
-## 実機テスト前ブロッカー（2026-04-10）
-- `npm view expo-template-bare-minimum@sdk-52 dist --json` が registry 403 で失敗し、`expo prebuild` が完了しない。
-- そのため `android/` が生成されず、`./gradlew assembleRelease` と APK 生成確認を継続できない。
-
-
-## 実機テストまでの未完了項目（対応手順）
-1. npm レジストリアクセス制限を解除後、`npm view expo-template-bare-minimum@sdk-52 dist --json` が成功することを確認。
-2. `npx expo prebuild --platform android --no-install` を再実行して `android/` を生成。
-3. `cd android && ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon` を実行。
-4. `android/app/build/outputs/apk/release/app-release-unsigned.apk` の存在を確認。
-5. APK を実機にインストールし、セクション6の確認項目（起動/メモ/ラベル/SQLite）を消化。
+## 実機テスト前ブロッカー（2026-04-11 時点）
+- ブロッカーは解消済み。ローカルAPKビルド成功により、実機テスト開始可能。
 
 ## 4. GitHub Actions リリース実行
 - [x] `main` に push 後、`Android Build` ワークフローが成功（2026-04-09 確認済み）
@@ -61,7 +52,7 @@
 - [x] 既知の制限事項（もしあれば）を記載
 - [x] マイグレーション/互換性注意点を記載
 
-## 6. リリース後確認
+## 6. リリース後確認（v0.1.4-beta 実機テスト結果を反映）
 - [ ] 実機インストール確認（起動・メモ作成・編集・削除・検索）
 - [ ] ラベル操作確認（作成/編集/削除）
 - [ ] SQLite 既存データが壊れていないことを確認

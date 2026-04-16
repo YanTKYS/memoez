@@ -13,16 +13,16 @@
 
 ## マイグレーション / 互換性
 - アプリバージョン: `0.1.4`
-- Android `versionCode`: `3`
+- Android `versionCode`: `5`
 - DB では `labels(name)` に「`deleted_at IS NULL` 条件付きユニークインデックス」を適用済み。
 
 
-## リリース作業メモ（2026-04-10）
-- `npm run lint` は 2026-04-10 再実行で成功（warningのみ、errorなし）。
-- `npx expo prebuild --platform android --no-install` は `npm view expo-template-bare-minimum@sdk-52 dist --json` の registry 403 失敗で中断。
-- そのため、実機テスト前に Android ローカル release ビルド確認の再実行が必要。
+## リリース作業メモ（2026-04-16）
+- `npm run lint` は再実行で成功（warningのみ、errorなし）。
+- ローカルAPKビルドが成功し、`android/app/build/outputs/apk/release/app-release-unsigned.apk` を確認。
+- v0.1.4-beta の実機テストは完了し、重大な問題なし。
 
 
 ### 実機テスト開始条件
-- `android/` 生成 (`expo prebuild`) が成功していること。
-- `app-release-unsigned.apk` 生成を確認してから実機テストに進むこと。
+- `android/` 生成 (`expo prebuild`) が成功していること（完了）。
+- `app-release-unsigned.apk` 生成を確認してから実機テストに進むこと（完了）。
