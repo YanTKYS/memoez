@@ -2,7 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
 
-export function useSearch() {
+function matchesQuery(note: Note, q: string): boolean {
+  const lower = q.toLowerCase();
+  if (note.title.toLowerCase().includes(lower)) return true;
+  if (note.content.toLowerCase().includes(lower)) return true;
+  if (note.labels.some((l) => l.name.toLowerCase().includes(lower))) return true;
+  return note.checklistItems.some((item) => item.text.toLowerCase().includes(lower));
+}
+
+export function useSearch(selectedLabelId: number | null = null) {
   const [query,   setQuery]   = useState('');
   const [results, setResults] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
@@ -11,7 +19,8 @@ export function useSearch() {
   const seqRef = useRef(0);
 
   const search = useCallback(async (q: string) => {
-    if (!q.trim()) {
+    const keyword = q.trim();
+    if (!keyword && selectedLabelId === null) {
       setResults([]);
       setLoading(false);
       return;
@@ -21,7 +30,13 @@ export function useSearch() {
     setLoading(true);
 
     try {
-      const data = await getNoteRepository().search(q.trim());
+      let data: Note[];
+      if (selectedLabelId !== null) {
+        const byLabel = await getNoteRepository().findByLabel(selectedLabelId);
+        data = keyword ? byLabel.filter((n) => matchesQuery(n, keyword)) : byLabel;
+      } else {
+        data = await getNoteRepository().search(keyword);
+      }
       // 最新リクエスト以外の結果は捨てる
       if (seq === seqRef.current) {
         setResults(data);
@@ -36,13 +51,13 @@ export function useSearch() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [selectedLabelId]);
 
   // debounce 300ms
   useEffect(() => {
     const timer = setTimeout(() => search(query), 300);
     return () => clearTimeout(timer);
-  }, [query, search]);
+  }, [query, selectedLabelId, search]);
 
   return { query, setQuery, results, loading };
 }
