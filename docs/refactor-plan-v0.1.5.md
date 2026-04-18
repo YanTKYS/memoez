@@ -35,3 +35,4 @@
 - 既存 UX を壊さないことを最優先とし、段階的に分割する。
 - 2026-04-18: `useEditNote` のラベル関連責務を `useNoteLabelActions` へ分離。
 - 2026-04-18: `useSearch` の分岐ロジックを `searchQueryPlan` へ分離し、ユニットテストを追加。
+- 2026-04-18: `DrizzleNoteRepository` に active note 判定/取得 helper を導入し、重複クエリ条件を削減。
