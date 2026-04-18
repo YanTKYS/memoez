@@ -16,6 +16,12 @@ type Params = {
   formColor: NoteColor;
 };
 
+export function computeNextLabels(current: Label[], target: Label, attached: boolean): Label[] {
+  return attached
+    ? current.filter((l) => l.id !== target.id)
+    : [...current, target];
+}
+
 export function useNoteLabelActions({
   note,
   setNote,
@@ -32,9 +38,7 @@ export function useNoteLabelActions({
   const toggleNoteLabel = useCallback(async (label: Label, attached: boolean): Promise<void> => {
     if (!note) return;
     const prevLabels = note.labels;
-    const newLabels = attached
-      ? note.labels.filter((l) => l.id !== label.id)
-      : [...note.labels, label];
+    const newLabels = computeNextLabels(note.labels, label, attached);
 
     if (mountedRef.current) setNote({ ...note, labels: newLabels });
 

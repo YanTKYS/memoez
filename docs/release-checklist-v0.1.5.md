@@ -24,7 +24,7 @@
 - [x] `useEditNote` の責務分割（ラベル関連処理を `useNoteLabelActions` に分離、2026-04-18 実施）
 - [x] `DrizzleNoteRepository` の helper 分割（active note 条件と取得処理を共通化、2026-04-18 実施）
 - [x] `useSearch` の条件分岐整理（`searchQueryPlan` 導入、2026-04-18 実施）
-- [ ] hooks/repository の追加テスト
+- [x] hooks/repository の追加テスト（`searchQueryPlan` / `noteLabelActions` helper テスト追加、2026-04-18 実施）
 
 ## 3. リリース準備
 - [ ] `npm run lint`

@@ -36,3 +36,4 @@
 - 2026-04-18: `useEditNote` のラベル関連責務を `useNoteLabelActions` へ分離。
 - 2026-04-18: `useSearch` の分岐ロジックを `searchQueryPlan` へ分離し、ユニットテストを追加。
 - 2026-04-18: `DrizzleNoteRepository` に active note 判定/取得 helper を導入し、重複クエリ条件を削減。
+- 2026-04-18: `useNoteLabelActions` helper テストを追加し、ラベル付与/解除の回帰を防止。
