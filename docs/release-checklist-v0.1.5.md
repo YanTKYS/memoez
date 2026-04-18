@@ -27,7 +27,7 @@
 - [x] hooks/repository の追加テスト（`searchQueryPlan` / `noteLabelActions` helper テスト追加、2026-04-18 実施）
 
 ## 3. リリース準備
-- [ ] `npm run lint`
-- [ ] `npx tsc --noEmit`
-- [ ] `npm test -- --runInBand`
+- [x] `npm run lint`（2026-04-18 実施 / warningのみ）
+- [x] `npx tsc --noEmit`（2026-04-18 実施）
+- [x] `npm test -- --runInBand`（2026-04-18 実施）
 - [ ] Android ビルド（prebuild + assembleRelease）
