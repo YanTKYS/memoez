@@ -1,14 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
-
-function matchesQuery(note: Note, q: string): boolean {
-  const lower = q.toLowerCase();
-  if (note.title.toLowerCase().includes(lower)) return true;
-  if (note.content.toLowerCase().includes(lower)) return true;
-  if (note.labels.some((l) => l.name.toLowerCase().includes(lower))) return true;
-  return note.checklistItems.some((item) => item.text.toLowerCase().includes(lower));
-}
+import { buildSearchPlan, noteMatchesKeyword } from './searchQueryPlan';
 
 export function useSearch(selectedLabelId: number | null = null) {
   const [query,   setQuery]   = useState('');
@@ -19,8 +12,8 @@ export function useSearch(selectedLabelId: number | null = null) {
   const seqRef = useRef(0);
 
   const search = useCallback(async (q: string) => {
-    const keyword = q.trim();
-    if (!keyword && selectedLabelId === null) {
+    const plan = buildSearchPlan(q, selectedLabelId);
+    if (plan.mode === 'none') {
       setResults([]);
       setLoading(false);
       return;
@@ -31,11 +24,23 @@ export function useSearch(selectedLabelId: number | null = null) {
 
     try {
       let data: Note[];
-      if (selectedLabelId !== null) {
-        const byLabel = await getNoteRepository().findByLabel(selectedLabelId);
-        data = keyword ? byLabel.filter((n) => matchesQuery(n, keyword)) : byLabel;
-      } else {
-        data = await getNoteRepository().search(keyword);
+      switch (plan.mode) {
+        case 'label': {
+          data = await getNoteRepository().findByLabel(plan.selectedLabelId!);
+          break;
+        }
+        case 'label+keyword': {
+          const byLabel = await getNoteRepository().findByLabel(plan.selectedLabelId!);
+          data = byLabel.filter((n) => noteMatchesKeyword(n, plan.keyword));
+          break;
+        }
+        case 'keyword': {
+          data = await getNoteRepository().search(plan.keyword);
+          break;
+        }
+        default: {
+          data = [];
+        }
       }
       // 最新リクエスト以外の結果は捨てる
       if (seq === seqRef.current) {
