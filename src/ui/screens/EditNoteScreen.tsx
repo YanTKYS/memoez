@@ -19,6 +19,7 @@ import {
   Snackbar,
   useTheme,
 } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { ChecklistView } from '@/ui/components/EditNote/ChecklistView';
@@ -34,6 +35,7 @@ interface Props {
 }
 
 export function EditNoteScreen({ noteId }: Props) {
+  const router = useRouter();
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
 
@@ -64,7 +66,6 @@ export function EditNoteScreen({ noteId }: Props) {
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,
-    createAndAttachLabel,
   } = useEditNote(noteId);
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
@@ -237,7 +238,10 @@ export function EditNoteScreen({ noteId }: Props) {
           onDismiss={() => setShowLabels(false)}
           onFetchLabels={fetchLabels}
           onToggleLabel={toggleNoteLabel}
-          onCreateLabel={createAndAttachLabel}
+          onOpenLabelManager={() => {
+            setShowLabels(false);
+            router.push('/labels');
+          }}
         />
       )}
 

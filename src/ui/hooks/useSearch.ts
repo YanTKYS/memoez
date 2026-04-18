@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
+import { buildSearchPlan, noteMatchesKeyword } from './searchQueryPlan';
 
-export function useSearch() {
+export function useSearch(selectedLabelId: number | null = null) {
   const [query,   setQuery]   = useState('');
   const [results, setResults] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
@@ -11,7 +12,8 @@ export function useSearch() {
   const seqRef = useRef(0);
 
   const search = useCallback(async (q: string) => {
-    if (!q.trim()) {
+    const plan = buildSearchPlan(q, selectedLabelId);
+    if (plan.mode === 'none') {
       setResults([]);
       setLoading(false);
       return;
@@ -21,7 +23,25 @@ export function useSearch() {
     setLoading(true);
 
     try {
-      const data = await getNoteRepository().search(q.trim());
+      let data: Note[];
+      switch (plan.mode) {
+        case 'label': {
+          data = await getNoteRepository().findByLabel(plan.selectedLabelId!);
+          break;
+        }
+        case 'label+keyword': {
+          const byLabel = await getNoteRepository().findByLabel(plan.selectedLabelId!);
+          data = byLabel.filter((n) => noteMatchesKeyword(n, plan.keyword));
+          break;
+        }
+        case 'keyword': {
+          data = await getNoteRepository().search(plan.keyword);
+          break;
+        }
+        default: {
+          data = [];
+        }
+      }
       // 最新リクエスト以外の結果は捨てる
       if (seq === seqRef.current) {
         setResults(data);
@@ -36,13 +56,13 @@ export function useSearch() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [selectedLabelId]);
 
   // debounce 300ms
   useEffect(() => {
     const timer = setTimeout(() => search(query), 300);
     return () => clearTimeout(timer);
-  }, [query, search]);
+  }, [query, selectedLabelId, search]);
 
   return { query, setQuery, results, loading };
 }
