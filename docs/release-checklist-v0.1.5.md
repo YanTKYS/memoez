@@ -23,7 +23,7 @@
 ## 2. リファクタリング実行チェック
 - [x] `useEditNote` の責務分割（ラベル関連処理を `useNoteLabelActions` に分離、2026-04-18 実施）
 - [ ] `DrizzleNoteRepository` の helper 分割
-- [ ] `useSearch` の条件分岐整理
+- [x] `useSearch` の条件分岐整理（`searchQueryPlan` 導入、2026-04-18 実施）
 - [ ] hooks/repository の追加テスト
 
 ## 3. リリース準備
