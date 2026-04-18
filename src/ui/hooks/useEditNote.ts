@@ -140,8 +140,13 @@ export function useEditNote(noteId?: number) {
         style: 'destructive',
         onPress: async () => {
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          if (note) await getNoteRepository().delete(note.id);
-          router.back();
+          try {
+            if (note) await getNoteRepository().delete(note.id);
+            router.back();
+          } catch (e) {
+            console.error('delete note error:', e);
+            if (mountedRef.current) setSnackMsg('削除に失敗しました');
+          }
         },
       },
     ]);
@@ -177,19 +182,8 @@ export function useEditNote(noteId?: number) {
     }
   }, [note]);
 
-  const createAndAttachLabel = useCallback(async (name: string): Promise<Label> => {
-    if (!note) throw new Error('note is not saved yet');
-    const label = await getLabelRepository().create(name);
-    await getNoteRepository().attachLabel(note.id, label.id);
-    // 楽観的に labels に追加
-    if (mountedRef.current) {
-      setNote(prev => prev ? { ...prev, labels: [...prev.labels, label] } : prev);
-    }
-    return label;
-  }, [note]);
-
   // ─── 新規ノートの即時保存（ラベルシートを開く前に ID を確保する） ────────
-  // 空のノートでも createAndAttachLabel が動作するよう必ず DB に保存する
+  // 空のノートでもラベル付与が動作するよう必ず DB に保存する
   const prepareForLabels = useCallback(async (): Promise<boolean> => {
     if (!note) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -225,6 +219,5 @@ export function useEditNote(noteId?: number) {
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,
-    createAndAttachLabel,
   };
 }

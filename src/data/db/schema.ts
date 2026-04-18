@@ -128,5 +128,7 @@ export const BOOTSTRAP_SQL: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_notes_updated_at  ON notes(updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_notes_is_pinned   ON notes(is_pinned DESC, sort_weight DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_checklist_note_id ON checklist_items(note_id, position ASC)`,
-  `CREATE INDEX IF NOT EXISTS idx_note_labels_lid   ON note_labels(label_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_labels_name
+    ON labels(name) WHERE deleted_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_note_labels_label_id ON note_labels(label_id)`,
 ] as const;
