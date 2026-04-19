@@ -4,7 +4,7 @@ import * as schema from '../db/schema';
 import { notes, checklistItems, noteLabels, labels } from '../db/schema';
 import type { INoteRepository, CreateNoteInput, UpdateNoteInput } from '@/domain/repositories/INoteRepository';
 import type { Note, NoteColor } from '@/domain/entities/Note';
-import { toNote, toLabel, toChecklistItem } from '../mappers/noteMapper';
+import { toNote } from '../mappers/noteMapper';
 import { generateUUID } from '@/lib/uuid';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
@@ -13,6 +13,20 @@ export class DrizzleNoteRepository implements INoteRepository {
   constructor(private readonly db: DB) {}
 
   // ─── private helper ─────────────────────────────────────────────────────────
+
+  private activeNoteWhere(noteId?: number) {
+    if (noteId === undefined) return isNull(notes.deletedAt);
+    return and(eq(notes.id, noteId), isNull(notes.deletedAt));
+  }
+
+  private async findActiveNoteRow(noteId: number): Promise<typeof notes.$inferSelect | null> {
+    const rows = await this.db
+      .select()
+      .from(notes)
+      .where(this.activeNoteWhere(noteId))
+      .limit(1);
+    return rows[0] ?? null;
+  }
 
   /** note行 + 関連データを一括取得して Note エンティティに変換 */
   private async hydrateNotes(noteRows: (typeof notes.$inferSelect)[]): Promise<Note[]> {
@@ -72,14 +86,9 @@ export class DrizzleNoteRepository implements INoteRepository {
   }
 
   async findById(id: number): Promise<Note | null> {
-    const rows = await this.db
-      .select()
-      .from(notes)
-      .where(and(eq(notes.id, id), isNull(notes.deletedAt)))
-      .limit(1);
-
-    if (rows.length === 0) return null;
-    const hydrated = await this.hydrateNotes(rows);
+    const row = await this.findActiveNoteRow(id);
+    if (!row) return null;
+    const hydrated = await this.hydrateNotes([row]);
     return hydrated[0] ?? null;
   }
 
@@ -178,7 +187,7 @@ export class DrizzleNoteRepository implements INoteRepository {
     await this.db
       .update(notes)
       .set(patch)
-      .where(eq(notes.id, id));
+      .where(this.activeNoteWhere(id));
 
     const note = await this.findById(id);
     if (!note) throw new Error(`Note ${id} not found after update`);
@@ -186,26 +195,24 @@ export class DrizzleNoteRepository implements INoteRepository {
   }
 
   async togglePin(id: number): Promise<Note> {
-    const rows = await this.db.select().from(notes).where(eq(notes.id, id)).limit(1);
-    const row = rows[0];
+    const row = await this.findActiveNoteRow(id);
     if (!row) throw new Error(`Note ${id} not found`);
     await this.db
       .update(notes)
       .set({ isPinned: !row.isPinned, updatedAt: new Date() })
-      .where(eq(notes.id, id));
+      .where(this.activeNoteWhere(id));
     const updated = await this.findById(id);
     if (!updated) throw new Error(`Note ${id} not found after togglePin`);
     return updated;
   }
 
   async toggleArchive(id: number): Promise<Note> {
-    const rows = await this.db.select().from(notes).where(eq(notes.id, id)).limit(1);
-    const row = rows[0];
+    const row = await this.findActiveNoteRow(id);
     if (!row) throw new Error(`Note ${id} not found`);
     await this.db
       .update(notes)
       .set({ isArchived: !row.isArchived, updatedAt: new Date() })
-      .where(eq(notes.id, id));
+      .where(this.activeNoteWhere(id));
     const updated = await this.findById(id);
     if (!updated) throw new Error(`Note ${id} not found after toggleArchive`);
     return updated;
@@ -219,7 +226,7 @@ export class DrizzleNoteRepository implements INoteRepository {
     await this.db
       .update(notes)
       .set({ deletedAt: new Date() })
-      .where(eq(notes.id, id));
+      .where(this.activeNoteWhere(id));
     // 将来の同期拡張ポイント:
     // deletedAt が設定されたレコードは syncPendingChanges() で
     // サーバーに DELETE リクエストを送信し、応答後に hardDelete() する
@@ -270,12 +277,12 @@ export class DrizzleNoteRepository implements INoteRepository {
       await tx
         .update(notes)
         .set({ updatedAt: now })
-        .where(eq(notes.id, noteId));
+        .where(this.activeNoteWhere(noteId));
     });
 
-    const rows = await this.db.select().from(notes).where(eq(notes.id, noteId)).limit(1);
-    if (!rows[0]) throw new Error(`Note ${noteId} not found after updateChecklistItems`);
-    const hydrated = await this.hydrateNotes(rows);
+    const row = await this.findActiveNoteRow(noteId);
+    if (!row) throw new Error(`Note ${noteId} not found after updateChecklistItems`);
+    const hydrated = await this.hydrateNotes([row]);
     return hydrated[0]!;
   }
 
@@ -283,7 +290,7 @@ export class DrizzleNoteRepository implements INoteRepository {
     const result = await this.db
       .select({ max: sql<number>`MAX(${notes.sortWeight})` })
       .from(notes)
-      .where(isNull(notes.deletedAt));
+      .where(this.activeNoteWhere());
     return result[0]?.max ?? 0;
   }
 }
