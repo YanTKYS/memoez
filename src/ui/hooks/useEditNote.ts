@@ -62,10 +62,12 @@ export function useEditNote(noteId?: number) {
 
       if (note) {
         const updated = await repo.update(note.id, {
-          title:   form.title,
-          content: form.content,
-          type:    form.type,
-          color:   form.color,
+          title:      form.title,
+          content:    form.content,
+          type:       form.type,
+          color:      form.color,
+          dueAt:      form.dueAt,
+          reminderAt: form.reminderAt,
         });
         if (mountedRef.current) setNote(updated);
 
@@ -76,10 +78,12 @@ export function useEditNote(noteId?: number) {
         }
       } else {
         const created = await repo.create({
-          title:   form.title,
-          content: form.content,
-          type:    form.type,
-          color:   form.color,
+          title:      form.title,
+          content:    form.content,
+          type:       form.type,
+          color:      form.color,
+          dueAt:      form.dueAt,
+          reminderAt: form.reminderAt,
         });
         if (mountedRef.current) setNote(created);
 
