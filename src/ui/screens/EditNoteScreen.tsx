@@ -19,6 +19,7 @@ import {
   Snackbar,
   useTheme,
 } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { ChecklistView } from '@/ui/components/EditNote/ChecklistView';
@@ -27,13 +28,14 @@ import { spacing } from '@/ui/theme/spacing';
 import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
 import { LabelPickerSheet } from '@/ui/components/common/LabelPickerSheet';
-import { formatRelativeTime } from '@/lib/dateUtils';
+import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
 
 interface Props {
   noteId?: number;
 }
 
 export function EditNoteScreen({ noteId }: Props) {
+  const router = useRouter();
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
 
@@ -53,6 +55,7 @@ export function EditNoteScreen({ noteId }: Props) {
     setContent,
     setType,
     setColor,
+    setDueAt,
     addChecklistItem,
     updateChecklistItem,
     toggleChecklistItem,
@@ -64,7 +67,6 @@ export function EditNoteScreen({ noteId }: Props) {
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,
-    createAndAttachLabel,
   } = useEditNote(noteId);
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
@@ -98,6 +100,26 @@ export function EditNoteScreen({ noteId }: Props) {
     const ok = await prepareForLabels();
     if (ok) setShowLabels(true);
   }, [prepareForLabels]);
+
+  const handleDueAtPress = useCallback(() => {
+    const now = new Date();
+    const todayAt21 = new Date(now);
+    todayAt21.setHours(21, 0, 0, 0);
+
+    const tomorrowAt21 = new Date(todayAt21);
+    tomorrowAt21.setDate(todayAt21.getDate() + 1);
+
+    const nextWeekAt21 = new Date(todayAt21);
+    nextWeekAt21.setDate(todayAt21.getDate() + 7);
+
+    Alert.alert('期限を設定', '期限を選択してください', [
+      { text: '今日 21:00', onPress: () => setDueAt(todayAt21) },
+      { text: '明日 21:00', onPress: () => setDueAt(tomorrowAt21) },
+      { text: '1週間後 21:00', onPress: () => setDueAt(nextWeekAt21) },
+      { text: '期限を解除', style: 'destructive', onPress: () => setDueAt(null) },
+      { text: 'キャンセル', style: 'cancel' },
+    ]);
+  }, [setDueAt]);
 
   const colorScheme = useColorScheme();
   const theme       = useTheme();
@@ -215,6 +237,16 @@ export function EditNoteScreen({ noteId }: Props) {
             size={22}
             onPress={handleLabelPress}
           />
+          <IconButton
+            icon="calendar-clock-outline"
+            size={22}
+            onPress={handleDueAtPress}
+          />
+          {form.dueAt && (
+            <Text variant="labelSmall" style={[styles.dueAt, { color: theme.colors.onSurfaceVariant }]}>
+              {formatDueDateTime(form.dueAt)}
+            </Text>
+          )}
           {note && (
             <Text variant="labelSmall" style={[styles.updatedAt, { color: theme.colors.onSurfaceVariant }]}>
               {formatRelativeTime(note.updatedAt)}
@@ -237,7 +269,10 @@ export function EditNoteScreen({ noteId }: Props) {
           onDismiss={() => setShowLabels(false)}
           onFetchLabels={fetchLabels}
           onToggleLabel={toggleNoteLabel}
-          onCreateLabel={createAndAttachLabel}
+          onOpenLabelManager={() => {
+            setShowLabels(false);
+            router.push('/labels');
+          }}
         />
       )}
 
@@ -281,6 +316,10 @@ const styles = StyleSheet.create({
   updatedAt: {
     marginLeft:  'auto',
     marginRight: spacing.sm,
+  },
+  dueAt: {
+    marginLeft: spacing.xs,
+    marginRight: spacing.xs,
   },
   savedIndicator: {
     marginRight: spacing.sm,
