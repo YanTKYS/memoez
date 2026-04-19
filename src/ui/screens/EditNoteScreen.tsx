@@ -32,7 +32,6 @@ import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
 import { LabelPickerSheet } from '@/ui/components/common/LabelPickerSheet';
 import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
-import { buildDueDatePresets } from '@/ui/hooks/dueDatePresets';
 
 interface Props {
   noteId?: number;
@@ -43,8 +42,6 @@ export function EditNoteScreen({ noteId }: Props) {
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [showDueModal, setShowDueModal] = useState(false);
-  const [customDueText, setCustomDueText] = useState('');
-  const [dueError, setDueError] = useState('');
 
   // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
   const contentInputRef = useRef<TextInput>(null);
@@ -109,24 +106,14 @@ export function EditNoteScreen({ noteId }: Props) {
   }, [prepareForLabels]);
 
   const handleDueAtPress = useCallback(() => {
-    const base = form.dueAt ?? new Date();
-    setCustomDueText(formatDueDateTime(base));
-    setDueError('');
+    if (!form.dueAt) setDueAt(new Date());
     setShowDueModal(true);
-  }, [form.dueAt]);
+  }, [form.dueAt, setDueAt]);
 
-  const applyCustomDue = useCallback(() => {
-    const value = customDueText.trim();
-    const normalized = value.replace(/\//g, '-');
-    const parsed = new Date(normalized);
-    if (Number.isNaN(parsed.getTime())) {
-      setDueError('日時形式は YYYY/MM/DD HH:mm で入力してください');
-      return;
-    }
-    setDueAt(parsed);
-    setShowDueModal(false);
-    setDueError('');
-  }, [customDueText, setDueAt]);
+  const shiftDueAt = useCallback((deltaMs: number) => {
+    const base = form.dueAt ?? new Date();
+    setDueAt(new Date(base.getTime() + deltaMs));
+  }, [form.dueAt, setDueAt]);
 
   const colorScheme = useColorScheme();
   const theme       = useTheme();
@@ -282,42 +269,33 @@ export function EditNoteScreen({ noteId }: Props) {
         >
           <Text variant="titleMedium">期限を設定</Text>
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            プリセットを選ぶか、日時を自由入力してください。
+            加算・減算で期限を調整してください。
           </Text>
 
-          <View style={styles.presetRow}>
-            {buildDueDatePresets(new Date()).map((preset) => (
-              <Button
-                key={preset.label}
-                mode="outlined"
-                compact
-                onPress={() => {
-                  setDueAt(preset.value);
-                  if (preset.value) setCustomDueText(formatDueDateTime(preset.value));
-                }}
-              >
-                {preset.label}
-              </Button>
-            ))}
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(-7 * 24 * 60 * 60 * 1000)}>-1週間</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(-24 * 60 * 60 * 1000)}>-1日</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(-60 * 60 * 1000)}>-1時間</Button>
           </View>
-
-          <TextInput
-            style={[styles.dueInput, { color: theme.colors.onSurface, borderColor: theme.colors.outlineVariant }]}
-            value={customDueText}
-            onChangeText={setCustomDueText}
-            placeholder="YYYY/MM/DD HH:mm"
-            placeholderTextColor={theme.colors.onSurfaceDisabled}
-          />
-          {!!dueError && (
-            <Text variant="labelSmall" style={{ color: theme.colors.error }}>
-              {dueError}
-            </Text>
-          )}
+          <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+            現在の期限: {form.dueAt ? formatDueDateTime(form.dueAt) : '未設定'}
+          </Text>
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(60 * 60 * 1000)}>+1時間</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(24 * 60 * 60 * 1000)}>+1日</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(7 * 24 * 60 * 60 * 1000)}>+1週間</Button>
+          </View>
 
           <View style={styles.dueActions}>
             <Button onPress={() => setShowDueModal(false)}>キャンセル</Button>
-            <Button onPress={() => setDueAt(null)}>解除</Button>
-            <Button mode="contained" onPress={applyCustomDue}>設定</Button>
+            <Button
+              onPress={() => {
+                setDueAt(null);
+                setShowDueModal(false);
+              }}
+            >
+              解除
+            </Button>
           </View>
         </Modal>
       </Portal>
@@ -395,16 +373,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: spacing.sm,
   },
-  presetRow: {
+  adjustRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
-  },
-  dueInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
   },
   dueActions: {
     flexDirection: 'row',
