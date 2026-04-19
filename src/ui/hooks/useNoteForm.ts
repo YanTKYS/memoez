@@ -13,6 +13,8 @@ export interface NoteFormState {
   content:        string;
   type:           NoteType;
   color:          NoteColor;
+  dueAt:          Date | null;
+  reminderAt:     Date | null;
   checklistItems: DraftChecklistItem[];
 }
 
@@ -22,6 +24,7 @@ export interface UseNoteFormReturn {
   setContent:          (v: string) => void;
   setType:             (v: NoteType) => void;
   setColor:            (v: NoteColor) => void;
+  setDueAt:            (v: Date | null) => void;
   addChecklistItem:    () => void;
   updateChecklistItem: (key: string, text: string) => void;
   toggleChecklistItem: (key: string) => void;
@@ -39,6 +42,8 @@ function noteToForm(note: Note): NoteFormState {
     content: note.content,
     type:    note.type,
     color:   note.color,
+    dueAt:   note.dueAt,
+    reminderAt: note.reminderAt,
     checklistItems: note.checklistItems.map((item) => ({
       key:       String(item.id),
       text:      item.text,
@@ -52,6 +57,8 @@ const defaultForm = (): NoteFormState => ({
   content:        '',
   type:           'TEXT',
   color:          'NONE',
+  dueAt:          null,
+  reminderAt:     null,
   checklistItems: [],
 });
 
@@ -86,6 +93,7 @@ export function useNoteForm(): UseNoteFormReturn {
   }, [genKey]);
 
   const setColor = useCallback((v: NoteColor) => setForm((f) => ({ ...f, color: v })), []);
+  const setDueAt = useCallback((v: Date | null) => setForm((f) => ({ ...f, dueAt: v })), []);
 
   const addChecklistItem = useCallback(() => {
     const key = genKey();
@@ -140,6 +148,7 @@ export function useNoteForm(): UseNoteFormReturn {
     setContent,
     setType,
     setColor,
+    setDueAt,
     addChecklistItem,
     updateChecklistItem,
     toggleChecklistItem,

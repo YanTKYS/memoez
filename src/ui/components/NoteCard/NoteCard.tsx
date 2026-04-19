@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Note } from '@/domain/entities/Note';
 import { NOTE_COLOR_LIGHT, NOTE_COLOR_DARK } from '@/ui/theme/colors';
 import { spacing } from '@/ui/theme/spacing';
-import { formatRelativeTime } from '@/lib/dateUtils';
+import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
 
 interface Props {
   note:    Note;
@@ -22,6 +22,7 @@ export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = t
   const maxLines    = isGrid ? 5 : 2;
   const handlePress = useCallback(() => onPress(note), [onPress, note]);
   const subtleColor = theme.colors.onSurfaceVariant;
+  const isOverdue = Boolean(note.dueAt && note.dueAt.getTime() < Date.now());
 
   return (
     <TouchableOpacity
@@ -74,6 +75,22 @@ export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = t
           <MaterialCommunityIcons name="pin" size={14} color={subtleColor} />
         )}
       </View>
+
+      {note.dueAt && (
+        <View style={styles.dueRow}>
+          <MaterialCommunityIcons
+            name={isOverdue ? 'clock-alert-outline' : 'clock-outline'}
+            size={13}
+            color={isOverdue ? theme.colors.error : subtleColor}
+          />
+          <Text
+            variant="labelSmall"
+            style={[styles.dueText, { color: isOverdue ? theme.colors.error : subtleColor }]}
+          >
+            期限: {formatDueDateTime(note.dueAt)}
+          </Text>
+        </View>
+      )}
 
       {/* 更新時刻 (リストモード) */}
       {!isGrid && (
@@ -188,6 +205,15 @@ const styles = StyleSheet.create({
     fontSize:       10,
     lineHeight:     14,
     marginVertical: 0,
+  },
+  dueRow: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dueText: {
+    fontSize: 11,
   },
   time: {
     textAlign: 'right',
