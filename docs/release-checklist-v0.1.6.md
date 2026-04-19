@@ -29,7 +29,7 @@
 - [x] JSON export 実装（notes / labels / checklist / archive 含む、2026-04-19 実施）
 - [x] JSON import 実装（フォーマット検証 + 失敗時エラーメッセージ、2026-04-19 実施）
 - [x] 重複データ方針を実装（マージ/上書きの仕様確定、2026-04-19 実施）
-- [ ] import/export UI導線を設定画面へ追加
+- [x] import/export UI導線を追加（Home→Backup画面、2026-04-19 実施）
 - [x] 壊れたJSON・部分欠損JSONの回帰テスト追加（2026-04-19 実施）
 
 ## 3. リリース準備

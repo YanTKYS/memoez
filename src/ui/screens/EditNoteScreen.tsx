@@ -17,6 +17,9 @@ import {
   Divider,
   ActivityIndicator,
   Snackbar,
+  Portal,
+  Modal,
+  Button,
   useTheme,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
@@ -39,6 +42,9 @@ export function EditNoteScreen({ noteId }: Props) {
   const router = useRouter();
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
+  const [showDueModal, setShowDueModal] = useState(false);
+  const [customDueText, setCustomDueText] = useState('');
+  const [dueError, setDueError] = useState('');
 
   // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
   const contentInputRef = useRef<TextInput>(null);
@@ -103,16 +109,24 @@ export function EditNoteScreen({ noteId }: Props) {
   }, [prepareForLabels]);
 
   const handleDueAtPress = useCallback(() => {
-    const presets = buildDueDatePresets(new Date());
-    Alert.alert('期限を設定', '期限を選択してください', [
-      ...presets.map((preset) => ({
-        text: preset.label,
-        style: preset.destructive ? 'destructive' as const : 'default' as const,
-        onPress: () => setDueAt(preset.value),
-      })),
-      { text: 'キャンセル', style: 'cancel' },
-    ]);
-  }, [setDueAt]);
+    const base = form.dueAt ?? new Date();
+    setCustomDueText(formatDueDateTime(base));
+    setDueError('');
+    setShowDueModal(true);
+  }, [form.dueAt]);
+
+  const applyCustomDue = useCallback(() => {
+    const value = customDueText.trim();
+    const normalized = value.replace(/\//g, '-');
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      setDueError('日時形式は YYYY/MM/DD HH:mm で入力してください');
+      return;
+    }
+    setDueAt(parsed);
+    setShowDueModal(false);
+    setDueError('');
+  }, [customDueText, setDueAt]);
 
   const colorScheme = useColorScheme();
   const theme       = useTheme();
@@ -260,6 +274,54 @@ export function EditNoteScreen({ noteId }: Props) {
         onDismiss={() => setShowColor(false)}
       />
 
+      <Portal>
+        <Modal
+          visible={showDueModal}
+          onDismiss={() => setShowDueModal(false)}
+          contentContainerStyle={[styles.dueModal, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="titleMedium">期限を設定</Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            プリセットを選ぶか、日時を自由入力してください。
+          </Text>
+
+          <View style={styles.presetRow}>
+            {buildDueDatePresets(new Date()).map((preset) => (
+              <Button
+                key={preset.label}
+                mode="outlined"
+                compact
+                onPress={() => {
+                  setDueAt(preset.value);
+                  if (preset.value) setCustomDueText(formatDueDateTime(preset.value));
+                }}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </View>
+
+          <TextInput
+            style={[styles.dueInput, { color: theme.colors.onSurface, borderColor: theme.colors.outlineVariant }]}
+            value={customDueText}
+            onChangeText={setCustomDueText}
+            placeholder="YYYY/MM/DD HH:mm"
+            placeholderTextColor={theme.colors.onSurfaceDisabled}
+          />
+          {!!dueError && (
+            <Text variant="labelSmall" style={{ color: theme.colors.error }}>
+              {dueError}
+            </Text>
+          )}
+
+          <View style={styles.dueActions}>
+            <Button onPress={() => setShowDueModal(false)}>キャンセル</Button>
+            <Button onPress={() => setDueAt(null)}>解除</Button>
+            <Button mode="contained" onPress={applyCustomDue}>設定</Button>
+          </View>
+        </Modal>
+      </Portal>
+
       {note && (
         <LabelPickerSheet
           visible={showLabels}
@@ -326,5 +388,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
+  },
+  dueModal: {
+    margin: spacing.md,
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.sm,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  dueInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  dueActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
   },
 });
