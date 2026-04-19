@@ -17,8 +17,8 @@
 - [ ] 各PRをマージ前に Android ビルドまで通す（lint / typecheck / test / assemble）
 
 ## 1. 期限・通知（PR-A）
-- [ ] Note モデルへ `dueAt` / `reminderAt` を追加
-- [ ] DB schema / migration を追加（既存データは null 互換）
+- [x] Note モデルへ `dueAt` / `reminderAt` を追加（2026-04-19 実施）
+- [x] DB schema / migration を追加（既存データは null 互換、2026-04-19 実施）
 - [ ] 期限入力UI（作成/編集）を追加
 - [ ] 一覧の期限表示と期限順ソートを追加
 - [ ] 通知許可状態に応じたガイドUIを追加

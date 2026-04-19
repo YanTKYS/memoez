@@ -10,6 +10,8 @@ function makeNote(overrides: Partial<Note> = {}): Note {
     color: 'NONE',
     isPinned: false,
     isArchived: false,
+    dueAt: null,
+    reminderAt: null,
     sortWeight: 1000,
     createdAt: new Date(),
     updatedAt: new Date(),

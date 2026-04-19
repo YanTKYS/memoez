@@ -157,16 +157,18 @@ export class DrizzleNoteRepository implements INoteRepository {
     const result = await this.db
       .insert(notes)
       .values({
-        title:      input.title,
-        content:    input.content,
-        type:       input.type,
-        color:      input.color,
-        isPinned:   false,
-        isArchived: false,
-        sortWeight: maxWeight + 1000,
-        createdAt:  now,
-        updatedAt:  now,
-        serverId:   generateUUID(), // オフライン作成 → 後でサーバーに push する際の識別子
+        title:       input.title,
+        content:     input.content,
+        type:        input.type,
+        color:       input.color,
+        isPinned:    false,
+        isArchived:  false,
+        dueAt:       input.dueAt ?? null,
+        reminderAt:  input.reminderAt ?? null,
+        sortWeight:  maxWeight + 1000,
+        createdAt:   now,
+        updatedAt:   now,
+        serverId:    generateUUID(), // オフライン作成 → 後でサーバーに push する際の識別子
       })
       .returning();
 
@@ -183,6 +185,8 @@ export class DrizzleNoteRepository implements INoteRepository {
     if (input.content !== undefined) patch.content = input.content;
     if (input.type    !== undefined) patch.type    = input.type;
     if (input.color   !== undefined) patch.color   = input.color;
+    if (input.dueAt   !== undefined) patch.dueAt   = input.dueAt;
+    if (input.reminderAt !== undefined) patch.reminderAt = input.reminderAt;
 
     await this.db
       .update(notes)
