@@ -262,13 +262,52 @@ jobs:
             echo "⚠️ Signing secrets not configured — uploading unsigned APK."
           fi
 
+      - name: Resolve release title/body from docs
+        id: release_meta
+        shell: bash
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
+          CHANNEL="${{ steps.release_channel.outputs.channel }}"
+          DEFAULT_NAME="$TAG_NAME ($CHANNEL)"
+          RELEASE_DOC="docs/github-release-${TAG_NAME}.md"
+
+          if [ ! -f "$RELEASE_DOC" ]; then
+            echo "release_name=$DEFAULT_NAME" >> "$GITHUB_OUTPUT"
+            echo "generate_notes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TITLE=$(awk '
+            /^## Title/ { in_title=1; next }
+            /^## Note/  { in_title=0 }
+            in_title && NF { gsub(/`/, "", $0); print; exit }
+          ' "$RELEASE_DOC")
+
+          if [ -z "$TITLE" ]; then
+            TITLE="$DEFAULT_NAME"
+          fi
+
+          BODY=$(awk '
+            /^## Note/ { in_note=1; next }
+            in_note { print }
+          ' "$RELEASE_DOC")
+
+          echo "release_name=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "generate_notes=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "release_body<<EOF"
+            echo "$BODY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release and upload APK
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.apk.outputs.path }}
-          generate_release_notes: true
+          body: ${{ steps.release_meta.outputs.release_body }}
+          generate_release_notes: ${{ steps.release_meta.outputs.generate_notes }}
           prerelease: ${{ steps.release_channel.outputs.prerelease }}
-          name: ${{ github.event.inputs.tag_name || github.ref_name }} (${{ steps.release_channel.outputs.channel }})
+          name: ${{ steps.release_meta.outputs.release_name }}
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
