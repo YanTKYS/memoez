@@ -33,9 +33,9 @@
 - [x] 壊れたJSON・部分欠損JSONの回帰テスト追加（2026-04-19 実施）
 
 ## 3. リリース準備
-- [ ] `npm run lint`
-- [ ] `npx tsc --noEmit`
-- [ ] `npm test -- --runInBand`
+- [x] `npm run lint`（2026-04-19 実施 / warningのみ）
+- [x] `npx tsc --noEmit`（2026-04-19 実施）
+- [x] `npm test -- --runInBand`（2026-04-19 実施）
 - [ ] Android ビルド（prebuild + assembleRelease）
 - [ ] `docs/release-notes-v0.1.6.md` 作成
 - [ ] `docs/github-release-v0.1.6.md` 作成
