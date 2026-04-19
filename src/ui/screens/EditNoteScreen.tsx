@@ -246,6 +246,11 @@ export function EditNoteScreen({ noteId }: Props) {
             </Text>
           )}
         </View>
+        {form.dueAt && (
+          <Text style={[styles.notificationGuide, { color: theme.colors.onSurfaceVariant }]}>
+            リマインド通知には端末の通知許可が必要です（設定 ＞ アプリ通知）。
+          </Text>
+        )}
       </KeyboardAvoidingView>
 
       <ColorPicker
@@ -316,5 +321,10 @@ const styles = StyleSheet.create({
   },
   savedIndicator: {
     marginRight: spacing.sm,
+  },
+  notificationGuide: {
+    fontSize: 12,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
   },
 });

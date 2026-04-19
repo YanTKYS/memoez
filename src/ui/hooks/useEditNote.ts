@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
+import { reminderScheduler } from '@/lib/reminderScheduler';
 import { useNoteForm } from './useNoteForm';
 import { useNoteLabelActions } from './useNoteLabelActions';
 
@@ -70,6 +71,7 @@ export function useEditNote(noteId?: number) {
           reminderAt: form.reminderAt,
         });
         if (mountedRef.current) setNote(updated);
+        reminderScheduler.syncNote(updated);
 
         if (form.type === 'CHECKLIST') {
           // updateChecklistItems が Note を返すので直接 state に反映（DB往復1回節約）
@@ -86,6 +88,7 @@ export function useEditNote(noteId?: number) {
           reminderAt: form.reminderAt,
         });
         if (mountedRef.current) setNote(created);
+        reminderScheduler.syncNote(created);
 
         if (form.type === 'CHECKLIST') {
           const refreshed = await repo.updateChecklistItems(created.id, items);
@@ -146,6 +149,7 @@ export function useEditNote(noteId?: number) {
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           try {
             if (note) await getNoteRepository().delete(note.id);
+            if (note) reminderScheduler.cancel(note.id);
             router.back();
           } catch (e) {
             console.error('delete note error:', e);
