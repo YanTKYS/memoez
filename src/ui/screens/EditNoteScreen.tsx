@@ -42,6 +42,7 @@ export function EditNoteScreen({ noteId }: Props) {
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [showDueModal, setShowDueModal] = useState(false);
+  const [dueDraft, setDueDraft] = useState<Date>(new Date());
 
   // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
   const contentInputRef = useRef<TextInput>(null);
@@ -106,14 +107,25 @@ export function EditNoteScreen({ noteId }: Props) {
   }, [prepareForLabels]);
 
   const handleDueAtPress = useCallback(() => {
-    if (!form.dueAt) setDueAt(new Date());
+    setDueDraft(form.dueAt ?? new Date());
     setShowDueModal(true);
-  }, [form.dueAt, setDueAt]);
+  }, [form.dueAt]);
 
   const shiftDueAt = useCallback((deltaMs: number) => {
-    const base = form.dueAt ?? new Date();
-    setDueAt(new Date(base.getTime() + deltaMs));
-  }, [form.dueAt, setDueAt]);
+    setDueDraft((prev) => new Date(prev.getTime() + deltaMs));
+  }, []);
+
+  const adjustDuePart = useCallback((part: 'year' | 'month' | 'date' | 'hours' | 'minutes', delta: number) => {
+    setDueDraft((prev) => {
+      const next = new Date(prev);
+      if (part === 'year') next.setFullYear(next.getFullYear() + delta);
+      if (part === 'month') next.setMonth(next.getMonth() + delta);
+      if (part === 'date') next.setDate(next.getDate() + delta);
+      if (part === 'hours') next.setHours(next.getHours() + delta);
+      if (part === 'minutes') next.setMinutes(next.getMinutes() + delta);
+      return next;
+    });
+  }, []);
 
   const colorScheme = useColorScheme();
   const theme       = useTheme();
@@ -269,17 +281,33 @@ export function EditNoteScreen({ noteId }: Props) {
         >
           <Text variant="titleMedium">期限を設定</Text>
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            加算・減算で期限を調整してください。
+            日時選択ダイアログで調整してください。
           </Text>
+          <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+            選択中: {formatDueDateTime(dueDraft)}
+          </Text>
+
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('year', -1)}>-年</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('month', -1)}>-月</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('date', -1)}>-日</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('hours', -1)}>-時</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('minutes', -5)}>-5分</Button>
+          </View>
+
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('minutes', 5)}>+5分</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('hours', 1)}>+時</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('date', 1)}>+日</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('month', 1)}>+月</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('year', 1)}>+年</Button>
+          </View>
 
           <View style={styles.adjustRow}>
             <Button mode="outlined" compact onPress={() => shiftDueAt(-7 * 24 * 60 * 60 * 1000)}>-1週間</Button>
             <Button mode="outlined" compact onPress={() => shiftDueAt(-24 * 60 * 60 * 1000)}>-1日</Button>
             <Button mode="outlined" compact onPress={() => shiftDueAt(-60 * 60 * 1000)}>-1時間</Button>
           </View>
-          <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
-            現在の期限: {form.dueAt ? formatDueDateTime(form.dueAt) : '未設定'}
-          </Text>
           <View style={styles.adjustRow}>
             <Button mode="outlined" compact onPress={() => shiftDueAt(60 * 60 * 1000)}>+1時間</Button>
             <Button mode="outlined" compact onPress={() => shiftDueAt(24 * 60 * 60 * 1000)}>+1日</Button>
@@ -288,6 +316,15 @@ export function EditNoteScreen({ noteId }: Props) {
 
           <View style={styles.dueActions}>
             <Button onPress={() => setShowDueModal(false)}>キャンセル</Button>
+            <Button
+              mode="contained"
+              onPress={() => {
+                setDueAt(dueDraft);
+                setShowDueModal(false);
+              }}
+            >
+              設定
+            </Button>
             <Button
               onPress={() => {
                 setDueAt(null);

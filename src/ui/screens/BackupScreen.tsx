@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
 import { Appbar, Button, Text, Snackbar, SegmentedButtons, useTheme, List } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,35 +14,86 @@ export function BackupScreen() {
   const [policy, setPolicy] = useState<ImportPolicy>('merge');
   const [busy, setBusy] = useState(false);
   const [snack, setSnack] = useState('');
+  const [directoryUri, setDirectoryUri] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
+  const fileNameOf = useCallback((uri: string): string => decodeURIComponent(uri.split('/').pop() ?? uri), []);
+
+  const ensureDirectory = useCallback(async (): Promise<string | null> => {
+    if (directoryUri) return directoryUri;
+
+    if (Platform.OS === 'android') {
+      const initial = FileSystem.StorageAccessFramework.getUriForDirectoryInRoot('Download');
+      const permission = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(initial);
+      if (!permission.granted || !permission.directoryUri) return null;
+      setDirectoryUri(permission.directoryUri);
+      return permission.directoryUri;
+    }
+
+    setDirectoryUri(FileSystem.documentDirectory);
+    return FileSystem.documentDirectory;
+  }, [directoryUri]);
+
   const refreshFiles = useCallback(async () => {
-    const dir = FileSystem.documentDirectory;
+    const dir = await ensureDirectory();
     if (!dir) return;
-    const names = await FileSystem.readDirectoryAsync(dir);
-    const jsonFiles = names
-      .filter((n) => n.endsWith('.json') && n.startsWith('memoez-backup-'))
-      .map((n) => `${dir}${n}`)
+
+    const isSaf = dir.startsWith('content://');
+    const uris = isSaf
+      ? await FileSystem.StorageAccessFramework.readDirectoryAsync(dir)
+      : (await FileSystem.readDirectoryAsync(dir)).map((name) => `${dir}${name}`);
+
+    const jsonFiles = uris
+      .filter((uri) => fileNameOf(uri).startsWith('memoez-backup-') && fileNameOf(uri).endsWith('.json'))
       .sort()
       .reverse();
+
     setFiles(jsonFiles);
     if (jsonFiles.length > 0 && !selectedFile) setSelectedFile(jsonFiles[0] ?? null);
-  }, [selectedFile]);
+  }, [ensureDirectory, fileNameOf, selectedFile]);
 
   useEffect(() => {
     refreshFiles();
   }, [refreshFiles]);
 
+  const handleChooseDirectory = useCallback(async () => {
+    if (Platform.OS !== 'android') {
+      setSnack('iOSではアプリ領域(documentDirectory)を使用します');
+      return;
+    }
+    const initial = directoryUri ?? FileSystem.StorageAccessFramework.getUriForDirectoryInRoot('Download');
+    const permission = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(initial);
+    if (!permission.granted || !permission.directoryUri) {
+      setSnack('フォルダ選択がキャンセルされました');
+      return;
+    }
+    setDirectoryUri(permission.directoryUri);
+    setSelectedFile(null);
+    setSnack('保存先/読込先を更新しました');
+  }, [directoryUri]);
+
   const handleExport = useCallback(async () => {
     setBusy(true);
     try {
       const json = await exportBackupJson(getNoteRepository());
-      const dir = FileSystem.documentDirectory;
-      if (!dir) throw new Error('documentDirectory が利用できません');
-      const fileUri = `${dir}memoez-backup-${Date.now()}.json`;
-      await FileSystem.writeAsStringAsync(fileUri, json);
-      setSnack(`エクスポート完了: ${fileUri.split('/').pop()}`);
+      const dir = await ensureDirectory();
+      if (!dir) throw new Error('保存先フォルダが未選択です');
+
+      let outputUri = '';
+      if (dir.startsWith('content://')) {
+        outputUri = await FileSystem.StorageAccessFramework.createFileAsync(
+          dir,
+          `memoez-backup-${Date.now()}`,
+          'application/json',
+        );
+        await FileSystem.StorageAccessFramework.writeAsStringAsync(outputUri, json);
+      } else {
+        outputUri = `${dir}memoez-backup-${Date.now()}.json`;
+        await FileSystem.writeAsStringAsync(outputUri, json);
+      }
+
+      setSnack(`エクスポート完了: ${fileNameOf(outputUri)}`);
       await refreshFiles();
     } catch (e) {
       console.error(e);
@@ -50,13 +101,14 @@ export function BackupScreen() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [ensureDirectory, fileNameOf, refreshFiles]);
 
   const handleImport = useCallback(async () => {
     if (!selectedFile) {
       setSnack('インポート対象ファイルを選択してください');
       return;
     }
+
     Alert.alert(
       'インポート実行',
       policy === 'overwrite'
@@ -98,7 +150,14 @@ export function BackupScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text variant="titleMedium">バックアップファイル Export / Import</Text>
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-          エクスポートは端末内ファイルへ保存され、インポートは保存済みJSONファイルを選択して実行します。
+          初期値は Download フォルダです。保存先/読込先を変更できます。
+        </Text>
+
+        <Button mode="outlined" onPress={handleChooseDirectory} disabled={busy}>
+          保存先/読込先を選択
+        </Button>
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+          現在の場所: {directoryUri ?? '(未選択)'}
         </Text>
 
         <View style={styles.row}>
@@ -130,12 +189,11 @@ export function BackupScreen() {
             </Text>
           ) : (
             files.map((uri) => {
-              const name = uri.split('/').pop() ?? uri;
               const selected = selectedFile === uri;
               return (
                 <List.Item
                   key={uri}
-                  title={name}
+                  title={fileNameOf(uri)}
                   description={selected ? '選択中' : undefined}
                   onPress={() => setSelectedFile(uri)}
                   left={(props) => (
