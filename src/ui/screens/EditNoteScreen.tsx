@@ -17,8 +17,12 @@ import {
   Divider,
   ActivityIndicator,
   Snackbar,
+  Portal,
+  Modal,
+  Button,
   useTheme,
 } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { ChecklistView } from '@/ui/components/EditNote/ChecklistView';
@@ -27,15 +31,18 @@ import { spacing } from '@/ui/theme/spacing';
 import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
 import { LabelPickerSheet } from '@/ui/components/common/LabelPickerSheet';
-import { formatRelativeTime } from '@/lib/dateUtils';
+import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
 
 interface Props {
   noteId?: number;
 }
 
 export function EditNoteScreen({ noteId }: Props) {
+  const router = useRouter();
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
+  const [showDueModal, setShowDueModal] = useState(false);
+  const [dueDraft, setDueDraft] = useState<Date>(new Date());
 
   // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
   const contentInputRef = useRef<TextInput>(null);
@@ -53,6 +60,7 @@ export function EditNoteScreen({ noteId }: Props) {
     setContent,
     setType,
     setColor,
+    setDueAt,
     addChecklistItem,
     updateChecklistItem,
     toggleChecklistItem,
@@ -64,7 +72,6 @@ export function EditNoteScreen({ noteId }: Props) {
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,
-    createAndAttachLabel,
   } = useEditNote(noteId);
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
@@ -98,6 +105,27 @@ export function EditNoteScreen({ noteId }: Props) {
     const ok = await prepareForLabels();
     if (ok) setShowLabels(true);
   }, [prepareForLabels]);
+
+  const handleDueAtPress = useCallback(() => {
+    setDueDraft(form.dueAt ?? new Date());
+    setShowDueModal(true);
+  }, [form.dueAt]);
+
+  const shiftDueAt = useCallback((deltaMs: number) => {
+    setDueDraft((prev) => new Date(prev.getTime() + deltaMs));
+  }, []);
+
+  const adjustDuePart = useCallback((part: 'year' | 'month' | 'date' | 'hours' | 'minutes', delta: number) => {
+    setDueDraft((prev) => {
+      const next = new Date(prev);
+      if (part === 'year') next.setFullYear(next.getFullYear() + delta);
+      if (part === 'month') next.setMonth(next.getMonth() + delta);
+      if (part === 'date') next.setDate(next.getDate() + delta);
+      if (part === 'hours') next.setHours(next.getHours() + delta);
+      if (part === 'minutes') next.setMinutes(next.getMinutes() + delta);
+      return next;
+    });
+  }, []);
 
   const colorScheme = useColorScheme();
   const theme       = useTheme();
@@ -215,12 +243,27 @@ export function EditNoteScreen({ noteId }: Props) {
             size={22}
             onPress={handleLabelPress}
           />
+          <IconButton
+            icon="calendar-clock-outline"
+            size={22}
+            onPress={handleDueAtPress}
+          />
+          {form.dueAt && (
+            <Text variant="labelSmall" style={[styles.dueAt, { color: theme.colors.onSurfaceVariant }]}>
+              {formatDueDateTime(form.dueAt)}
+            </Text>
+          )}
           {note && (
             <Text variant="labelSmall" style={[styles.updatedAt, { color: theme.colors.onSurfaceVariant }]}>
               {formatRelativeTime(note.updatedAt)}
             </Text>
           )}
         </View>
+        {form.dueAt && (
+          <Text style={[styles.notificationGuide, { color: theme.colors.onSurfaceVariant }]}>
+            リマインド通知には端末の通知許可が必要です（設定 ＞ アプリ通知）。
+          </Text>
+        )}
       </KeyboardAvoidingView>
 
       <ColorPicker
@@ -230,6 +273,70 @@ export function EditNoteScreen({ noteId }: Props) {
         onDismiss={() => setShowColor(false)}
       />
 
+      <Portal>
+        <Modal
+          visible={showDueModal}
+          onDismiss={() => setShowDueModal(false)}
+          contentContainerStyle={[styles.dueModal, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="titleMedium">期限を設定</Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            日時選択ダイアログで調整してください。
+          </Text>
+          <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+            選択中: {formatDueDateTime(dueDraft)}
+          </Text>
+
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('year', -1)}>-年</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('month', -1)}>-月</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('date', -1)}>-日</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('hours', -1)}>-時</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('minutes', -5)}>-5分</Button>
+          </View>
+
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('minutes', 5)}>+5分</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('hours', 1)}>+時</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('date', 1)}>+日</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('month', 1)}>+月</Button>
+            <Button mode="outlined" compact onPress={() => adjustDuePart('year', 1)}>+年</Button>
+          </View>
+
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(-7 * 24 * 60 * 60 * 1000)}>-1週間</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(-24 * 60 * 60 * 1000)}>-1日</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(-60 * 60 * 1000)}>-1時間</Button>
+          </View>
+          <View style={styles.adjustRow}>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(60 * 60 * 1000)}>+1時間</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(24 * 60 * 60 * 1000)}>+1日</Button>
+            <Button mode="outlined" compact onPress={() => shiftDueAt(7 * 24 * 60 * 60 * 1000)}>+1週間</Button>
+          </View>
+
+          <View style={styles.dueActions}>
+            <Button onPress={() => setShowDueModal(false)}>キャンセル</Button>
+            <Button
+              mode="contained"
+              onPress={() => {
+                setDueAt(dueDraft);
+                setShowDueModal(false);
+              }}
+            >
+              設定
+            </Button>
+            <Button
+              onPress={() => {
+                setDueAt(null);
+                setShowDueModal(false);
+              }}
+            >
+              解除
+            </Button>
+          </View>
+        </Modal>
+      </Portal>
+
       {note && (
         <LabelPickerSheet
           visible={showLabels}
@@ -237,7 +344,10 @@ export function EditNoteScreen({ noteId }: Props) {
           onDismiss={() => setShowLabels(false)}
           onFetchLabels={fetchLabels}
           onToggleLabel={toggleNoteLabel}
-          onCreateLabel={createAndAttachLabel}
+          onOpenLabelManager={() => {
+            setShowLabels(false);
+            router.push('/labels');
+          }}
         />
       )}
 
@@ -282,7 +392,32 @@ const styles = StyleSheet.create({
     marginLeft:  'auto',
     marginRight: spacing.sm,
   },
+  dueAt: {
+    marginLeft: spacing.xs,
+    marginRight: spacing.xs,
+  },
   savedIndicator: {
     marginRight: spacing.sm,
+  },
+  notificationGuide: {
+    fontSize: 12,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  dueModal: {
+    margin: spacing.md,
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.sm,
+  },
+  adjustRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  dueActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
   },
 });
