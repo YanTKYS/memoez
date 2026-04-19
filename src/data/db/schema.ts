@@ -25,6 +25,8 @@ export const notes = sqliteTable(
                   .default('NONE'),
     isPinned:   integer('is_pinned',   { mode: 'boolean' }).notNull().default(false),
     isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
+    dueAt:      integer('due_at',      { mode: 'timestamp_ms' }),
+    reminderAt: integer('reminder_at', { mode: 'timestamp_ms' }),
     sortWeight: real('sort_weight').notNull().default(0),
     createdAt:  integer('created_at',  { mode: 'timestamp_ms' }).notNull(),
     updatedAt:  integer('updated_at',  { mode: 'timestamp_ms' }).notNull(),
@@ -97,6 +99,8 @@ export const BOOTSTRAP_SQL: readonly string[] = [
     color       TEXT    NOT NULL DEFAULT 'NONE',
     is_pinned   INTEGER NOT NULL DEFAULT 0,
     is_archived INTEGER NOT NULL DEFAULT 0,
+    due_at      INTEGER,
+    reminder_at INTEGER,
     sort_weight REAL    NOT NULL DEFAULT 0,
     created_at  INTEGER NOT NULL,
     updated_at  INTEGER NOT NULL,
@@ -128,5 +132,7 @@ export const BOOTSTRAP_SQL: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_notes_updated_at  ON notes(updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_notes_is_pinned   ON notes(is_pinned DESC, sort_weight DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_checklist_note_id ON checklist_items(note_id, position ASC)`,
-  `CREATE INDEX IF NOT EXISTS idx_note_labels_lid   ON note_labels(label_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_labels_name
+    ON labels(name) WHERE deleted_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_note_labels_label_id ON note_labels(label_id)`,
 ] as const;

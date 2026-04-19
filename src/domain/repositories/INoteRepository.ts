@@ -1,17 +1,21 @@
 import type { Note, NoteColor, NoteType } from '../entities/Note';
 
 export interface CreateNoteInput {
-  title:   string;
-  content: string;
-  type:    NoteType;
-  color:   NoteColor;
+  title:      string;
+  content:    string;
+  type:       NoteType;
+  color:      NoteColor;
+  dueAt?:     Date | null;
+  reminderAt?: Date | null;
 }
 
 export interface UpdateNoteInput {
-  title?:   string;
-  content?: string;
-  color?:   NoteColor;
-  type?:    NoteType;
+  title?:      string;
+  content?:    string;
+  color?:      NoteColor;
+  type?:       NoteType;
+  dueAt?:      Date | null;
+  reminderAt?: Date | null;
 }
 
 export interface INoteRepository {
@@ -44,4 +48,3 @@ export interface INoteRepository {
   // /** サーバー同期完了を記録 */
   // markSynced(id: number): Promise<void>;
 }
-
