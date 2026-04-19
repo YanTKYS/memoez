@@ -17,8 +17,12 @@ import {
   Divider,
   ActivityIndicator,
   Snackbar,
+  Portal,
+  Modal,
+  Button,
   useTheme,
 } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { ChecklistView } from '@/ui/components/EditNote/ChecklistView';
@@ -27,15 +31,20 @@ import { spacing } from '@/ui/theme/spacing';
 import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
 import { LabelPickerSheet } from '@/ui/components/common/LabelPickerSheet';
-import { formatRelativeTime } from '@/lib/dateUtils';
+import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
+import { buildDueDatePresets } from '@/ui/hooks/dueDatePresets';
 
 interface Props {
   noteId?: number;
 }
 
 export function EditNoteScreen({ noteId }: Props) {
+  const router = useRouter();
   const [showColor,  setShowColor]  = useState(false);
   const [showLabels, setShowLabels] = useState(false);
+  const [showDueModal, setShowDueModal] = useState(false);
+  const [customDueText, setCustomDueText] = useState('');
+  const [dueError, setDueError] = useState('');
 
   // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
   const contentInputRef = useRef<TextInput>(null);
@@ -53,6 +62,7 @@ export function EditNoteScreen({ noteId }: Props) {
     setContent,
     setType,
     setColor,
+    setDueAt,
     addChecklistItem,
     updateChecklistItem,
     toggleChecklistItem,
@@ -64,7 +74,6 @@ export function EditNoteScreen({ noteId }: Props) {
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,
-    createAndAttachLabel,
   } = useEditNote(noteId);
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
@@ -98,6 +107,26 @@ export function EditNoteScreen({ noteId }: Props) {
     const ok = await prepareForLabels();
     if (ok) setShowLabels(true);
   }, [prepareForLabels]);
+
+  const handleDueAtPress = useCallback(() => {
+    const base = form.dueAt ?? new Date();
+    setCustomDueText(formatDueDateTime(base));
+    setDueError('');
+    setShowDueModal(true);
+  }, [form.dueAt]);
+
+  const applyCustomDue = useCallback(() => {
+    const value = customDueText.trim();
+    const normalized = value.replace(/\//g, '-');
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      setDueError('日時形式は YYYY/MM/DD HH:mm で入力してください');
+      return;
+    }
+    setDueAt(parsed);
+    setShowDueModal(false);
+    setDueError('');
+  }, [customDueText, setDueAt]);
 
   const colorScheme = useColorScheme();
   const theme       = useTheme();
@@ -215,12 +244,27 @@ export function EditNoteScreen({ noteId }: Props) {
             size={22}
             onPress={handleLabelPress}
           />
+          <IconButton
+            icon="calendar-clock-outline"
+            size={22}
+            onPress={handleDueAtPress}
+          />
+          {form.dueAt && (
+            <Text variant="labelSmall" style={[styles.dueAt, { color: theme.colors.onSurfaceVariant }]}>
+              {formatDueDateTime(form.dueAt)}
+            </Text>
+          )}
           {note && (
             <Text variant="labelSmall" style={[styles.updatedAt, { color: theme.colors.onSurfaceVariant }]}>
               {formatRelativeTime(note.updatedAt)}
             </Text>
           )}
         </View>
+        {form.dueAt && (
+          <Text style={[styles.notificationGuide, { color: theme.colors.onSurfaceVariant }]}>
+            リマインド通知には端末の通知許可が必要です（設定 ＞ アプリ通知）。
+          </Text>
+        )}
       </KeyboardAvoidingView>
 
       <ColorPicker
@@ -230,6 +274,54 @@ export function EditNoteScreen({ noteId }: Props) {
         onDismiss={() => setShowColor(false)}
       />
 
+      <Portal>
+        <Modal
+          visible={showDueModal}
+          onDismiss={() => setShowDueModal(false)}
+          contentContainerStyle={[styles.dueModal, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="titleMedium">期限を設定</Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            プリセットを選ぶか、日時を自由入力してください。
+          </Text>
+
+          <View style={styles.presetRow}>
+            {buildDueDatePresets(new Date()).map((preset) => (
+              <Button
+                key={preset.label}
+                mode="outlined"
+                compact
+                onPress={() => {
+                  setDueAt(preset.value);
+                  if (preset.value) setCustomDueText(formatDueDateTime(preset.value));
+                }}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </View>
+
+          <TextInput
+            style={[styles.dueInput, { color: theme.colors.onSurface, borderColor: theme.colors.outlineVariant }]}
+            value={customDueText}
+            onChangeText={setCustomDueText}
+            placeholder="YYYY/MM/DD HH:mm"
+            placeholderTextColor={theme.colors.onSurfaceDisabled}
+          />
+          {!!dueError && (
+            <Text variant="labelSmall" style={{ color: theme.colors.error }}>
+              {dueError}
+            </Text>
+          )}
+
+          <View style={styles.dueActions}>
+            <Button onPress={() => setShowDueModal(false)}>キャンセル</Button>
+            <Button onPress={() => setDueAt(null)}>解除</Button>
+            <Button mode="contained" onPress={applyCustomDue}>設定</Button>
+          </View>
+        </Modal>
+      </Portal>
+
       {note && (
         <LabelPickerSheet
           visible={showLabels}
@@ -237,7 +329,10 @@ export function EditNoteScreen({ noteId }: Props) {
           onDismiss={() => setShowLabels(false)}
           onFetchLabels={fetchLabels}
           onToggleLabel={toggleNoteLabel}
-          onCreateLabel={createAndAttachLabel}
+          onOpenLabelManager={() => {
+            setShowLabels(false);
+            router.push('/labels');
+          }}
         />
       )}
 
@@ -282,7 +377,38 @@ const styles = StyleSheet.create({
     marginLeft:  'auto',
     marginRight: spacing.sm,
   },
+  dueAt: {
+    marginLeft: spacing.xs,
+    marginRight: spacing.xs,
+  },
   savedIndicator: {
     marginRight: spacing.sm,
+  },
+  notificationGuide: {
+    fontSize: 12,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  dueModal: {
+    margin: spacing.md,
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.sm,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  dueInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  dueActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
   },
 });
