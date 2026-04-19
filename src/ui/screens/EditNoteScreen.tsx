@@ -29,6 +29,7 @@ import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
 import { LabelPickerSheet } from '@/ui/components/common/LabelPickerSheet';
 import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
+import { buildDueDatePresets } from '@/ui/hooks/dueDatePresets';
 
 interface Props {
   noteId?: number;
@@ -102,21 +103,13 @@ export function EditNoteScreen({ noteId }: Props) {
   }, [prepareForLabels]);
 
   const handleDueAtPress = useCallback(() => {
-    const now = new Date();
-    const todayAt21 = new Date(now);
-    todayAt21.setHours(21, 0, 0, 0);
-
-    const tomorrowAt21 = new Date(todayAt21);
-    tomorrowAt21.setDate(todayAt21.getDate() + 1);
-
-    const nextWeekAt21 = new Date(todayAt21);
-    nextWeekAt21.setDate(todayAt21.getDate() + 7);
-
+    const presets = buildDueDatePresets(new Date());
     Alert.alert('期限を設定', '期限を選択してください', [
-      { text: '今日 21:00', onPress: () => setDueAt(todayAt21) },
-      { text: '明日 21:00', onPress: () => setDueAt(tomorrowAt21) },
-      { text: '1週間後 21:00', onPress: () => setDueAt(nextWeekAt21) },
-      { text: '期限を解除', style: 'destructive', onPress: () => setDueAt(null) },
+      ...presets.map((preset) => ({
+        text: preset.label,
+        style: preset.destructive ? 'destructive' as const : 'default' as const,
+        onPress: () => setDueAt(preset.value),
+      })),
       { text: 'キャンセル', style: 'cancel' },
     ]);
   }, [setDueAt]);
