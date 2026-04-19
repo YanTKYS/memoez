@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Note } from '@/domain/entities/Note';
-import type { Label } from '@/domain/entities/Label';
-import { getNoteRepository, getLabelRepository } from '@/lib/di';
+import { getNoteRepository } from '@/lib/di';
+import { reminderScheduler } from '@/lib/reminderScheduler';
 import { useNoteForm } from './useNoteForm';
+import { useNoteLabelActions } from './useNoteLabelActions';
 
 export function useEditNote(noteId?: number) {
   const router = useRouter();
@@ -62,12 +63,15 @@ export function useEditNote(noteId?: number) {
 
       if (note) {
         const updated = await repo.update(note.id, {
-          title:   form.title,
-          content: form.content,
-          type:    form.type,
-          color:   form.color,
+          title:      form.title,
+          content:    form.content,
+          type:       form.type,
+          color:      form.color,
+          dueAt:      form.dueAt,
+          reminderAt: form.reminderAt,
         });
         if (mountedRef.current) setNote(updated);
+        reminderScheduler.syncNote(updated);
 
         if (form.type === 'CHECKLIST') {
           // updateChecklistItems が Note を返すので直接 state に反映（DB往復1回節約）
@@ -76,12 +80,15 @@ export function useEditNote(noteId?: number) {
         }
       } else {
         const created = await repo.create({
-          title:   form.title,
-          content: form.content,
-          type:    form.type,
-          color:   form.color,
+          title:      form.title,
+          content:    form.content,
+          type:       form.type,
+          color:      form.color,
+          dueAt:      form.dueAt,
+          reminderAt: form.reminderAt,
         });
         if (mountedRef.current) setNote(created);
+        reminderScheduler.syncNote(created);
 
         if (form.type === 'CHECKLIST') {
           const refreshed = await repo.updateChecklistItems(created.id, items);
@@ -140,8 +147,14 @@ export function useEditNote(noteId?: number) {
         style: 'destructive',
         onPress: async () => {
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          if (note) await getNoteRepository().delete(note.id);
-          router.back();
+          try {
+            if (note) await getNoteRepository().delete(note.id);
+            if (note) reminderScheduler.cancel(note.id);
+            router.back();
+          } catch (e) {
+            console.error('delete note error:', e);
+            if (mountedRef.current) setSnackMsg('削除に失敗しました');
+          }
         },
       },
     ]);
@@ -154,61 +167,16 @@ export function useEditNote(noteId?: number) {
     if (mountedRef.current) setNote(updated);
   }, [note]);
 
-  // ─── ラベル操作（楽観的更新 → findById 不要） ────────────────────────────
-  const fetchLabels = useCallback((): Promise<Label[]> =>
-    getLabelRepository().findAll(), []);
-
-  const toggleNoteLabel = useCallback(async (label: Label, attached: boolean): Promise<void> => {
-    if (!note) return;
-    const prevLabels = note.labels;
-    // 楽観的に UI を更新
-    const newLabels = attached
-      ? note.labels.filter(l => l.id !== label.id)
-      : [...note.labels, label];
-    if (mountedRef.current) setNote({ ...note, labels: newLabels });
-    const repo = getNoteRepository();
-    try {
-      if (attached) await repo.detachLabel(note.id, label.id);
-      else          await repo.attachLabel(note.id, label.id);
-    } catch (e) {
-      // DB失敗時ロールバック
-      if (mountedRef.current) setNote({ ...note, labels: prevLabels });
-      throw e; // LabelPickerSheet の errMsg 表示に伝播
-    }
-  }, [note]);
-
-  const createAndAttachLabel = useCallback(async (name: string): Promise<Label> => {
-    if (!note) throw new Error('note is not saved yet');
-    const label = await getLabelRepository().create(name);
-    await getNoteRepository().attachLabel(note.id, label.id);
-    // 楽観的に labels に追加
-    if (mountedRef.current) {
-      setNote(prev => prev ? { ...prev, labels: [...prev.labels, label] } : prev);
-    }
-    return label;
-  }, [note]);
-
-  // ─── 新規ノートの即時保存（ラベルシートを開く前に ID を確保する） ────────
-  // 空のノートでも createAndAttachLabel が動作するよう必ず DB に保存する
-  const prepareForLabels = useCallback(async (): Promise<boolean> => {
-    if (!note) {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      if (!isEmpty()) {
-        await saveNote();
-      } else {
-        // フォームが空でもノートを作成して ID を確保する
-        try {
-          const created = await getNoteRepository().create({
-            title: '', content: '', type: form.type, color: form.color,
-          });
-          if (mountedRef.current) setNote(created);
-        } catch (e) {
-          console.error('prepareForLabels create error:', e);
-        }
-      }
-    }
-    return mountedRef.current;
-  }, [note, isEmpty, saveNote, form.type, form.color]);
+  const { fetchLabels, toggleNoteLabel, prepareForLabels } = useNoteLabelActions({
+    note,
+    setNote,
+    mountedRef,
+    saveTimerRef,
+    isEmpty,
+    saveNote,
+    formType: form.type,
+    formColor: form.color,
+  });
 
   return {
     note,
@@ -225,6 +193,5 @@ export function useEditNote(noteId?: number) {
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,
-    createAndAttachLabel,
   };
 }
