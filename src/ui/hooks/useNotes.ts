@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
+import { sortNotesByDueThenUpdated } from './noteDueSort';
 
 interface UseNotesState {
   notes:   Note[];
@@ -20,7 +21,9 @@ export function useNotes(archived = false): UseNotesState {
     setError(null);
     try {
       const data = await getNoteRepository().findAll({ archived });
-      setNotes(data);
+      const pinned = sortNotesByDueThenUpdated(data.filter((note) => note.isPinned));
+      const regular = sortNotesByDueThenUpdated(data.filter((note) => !note.isPinned));
+      setNotes([...pinned, ...regular]);
     } catch (e) {
       setError('メモの読み込みに失敗しました');
       console.error(e);
