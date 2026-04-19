@@ -111,18 +111,18 @@ export function EditNoteScreen({ noteId }: Props) {
     setShowDueModal(true);
   }, [form.dueAt]);
 
-  const shiftDueAt = useCallback((deltaMs: number) => {
-    setDueDraft((prev) => new Date(prev.getTime() + deltaMs));
-  }, []);
-
-  const adjustDuePart = useCallback((part: 'year' | 'month' | 'date' | 'hours' | 'minutes', delta: number) => {
+  const shiftDraftDays = useCallback((days: number) => {
     setDueDraft((prev) => {
       const next = new Date(prev);
-      if (part === 'year') next.setFullYear(next.getFullYear() + delta);
-      if (part === 'month') next.setMonth(next.getMonth() + delta);
-      if (part === 'date') next.setDate(next.getDate() + delta);
-      if (part === 'hours') next.setHours(next.getHours() + delta);
-      if (part === 'minutes') next.setMinutes(next.getMinutes() + delta);
+      next.setDate(next.getDate() + days);
+      return next;
+    });
+  }, []);
+
+  const shiftDraftMinutes = useCallback((minutes: number) => {
+    setDueDraft((prev) => {
+      const next = new Date(prev);
+      next.setMinutes(next.getMinutes() + minutes);
       return next;
     });
   }, []);
@@ -281,38 +281,31 @@ export function EditNoteScreen({ noteId }: Props) {
         >
           <Text variant="titleMedium">期限を設定</Text>
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            日時選択ダイアログで調整してください。
+            日付と時刻を選択してください。
           </Text>
           <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
             選択中: {formatDueDateTime(dueDraft)}
           </Text>
 
-          <View style={styles.adjustRow}>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('year', -1)}>-年</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('month', -1)}>-月</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('date', -1)}>-日</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('hours', -1)}>-時</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('minutes', -5)}>-5分</Button>
+          <View style={styles.pickerRow}>
+            <Text variant="labelLarge">日付</Text>
+            <View style={styles.inlineRow}>
+              <Button compact mode="outlined" onPress={() => shiftDraftDays(-1)}>前日</Button>
+              <Text style={styles.pickerValue}>{`${dueDraft.getFullYear()}/${`${dueDraft.getMonth() + 1}`.padStart(2, '0')}/${`${dueDraft.getDate()}`.padStart(2, '0')}`}</Text>
+              <Button compact mode="outlined" onPress={() => shiftDraftDays(1)}>翌日</Button>
+            </View>
           </View>
 
-          <View style={styles.adjustRow}>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('minutes', 5)}>+5分</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('hours', 1)}>+時</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('date', 1)}>+日</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('month', 1)}>+月</Button>
-            <Button mode="outlined" compact onPress={() => adjustDuePart('year', 1)}>+年</Button>
+          <View style={styles.pickerRow}>
+            <Text variant="labelLarge">時刻</Text>
+            <View style={styles.inlineRow}>
+              <Button mode="outlined" compact onPress={() => shiftDraftMinutes(-30)}>-30分</Button>
+              <Text style={styles.pickerValue}>{`${`${dueDraft.getHours()}`.padStart(2, '0')}:${`${dueDraft.getMinutes()}`.padStart(2, '0')}`}</Text>
+              <Button mode="outlined" compact onPress={() => shiftDraftMinutes(30)}>+30分</Button>
+            </View>
           </View>
 
-          <View style={styles.adjustRow}>
-            <Button mode="outlined" compact onPress={() => shiftDueAt(-7 * 24 * 60 * 60 * 1000)}>-1週間</Button>
-            <Button mode="outlined" compact onPress={() => shiftDueAt(-24 * 60 * 60 * 1000)}>-1日</Button>
-            <Button mode="outlined" compact onPress={() => shiftDueAt(-60 * 60 * 1000)}>-1時間</Button>
-          </View>
-          <View style={styles.adjustRow}>
-            <Button mode="outlined" compact onPress={() => shiftDueAt(60 * 60 * 1000)}>+1時間</Button>
-            <Button mode="outlined" compact onPress={() => shiftDueAt(24 * 60 * 60 * 1000)}>+1日</Button>
-            <Button mode="outlined" compact onPress={() => shiftDueAt(7 * 24 * 60 * 60 * 1000)}>+1週間</Button>
-          </View>
+          <Button mode="text" onPress={() => setDueDraft(new Date())}>現在日時にリセット</Button>
 
           <View style={styles.dueActions}>
             <Button onPress={() => setShowDueModal(false)}>キャンセル</Button>
@@ -414,6 +407,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
+  },
+  pickerRow: {
+    gap: spacing.xs,
+  },
+  inlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  pickerValue: {
+    minWidth: 120,
+    textAlign: 'center',
+    fontWeight: '600',
   },
   dueActions: {
     flexDirection: 'row',
