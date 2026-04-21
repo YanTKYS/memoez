@@ -8,6 +8,26 @@ export interface DraftChecklistItem {
   isChecked: boolean;
 }
 
+export function textToChecklistParagraphs(text: string): DraftChecklistItem[] {
+  return text
+    .split(/\n\s*\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, idx) => ({
+      key: `parsed-${idx}`,
+      text: block.replace(/\n+/g, ' ').trim(),
+      isChecked: false,
+    }));
+}
+
+export function checklistToBulletText(items: DraftChecklistItem[]): string {
+  return items
+    .map((item) => item.text.trim())
+    .filter(Boolean)
+    .map((text) => `• ${text}`)
+    .join('\n');
+}
+
 export interface NoteFormState {
   title:          string;
   content:        string;
@@ -82,13 +102,22 @@ export function useNoteForm(): UseNoteFormReturn {
       ...f,
       type: v,
       checklistItems:
-        v === 'CHECKLIST' && f.checklistItems.length === 0 && f.content.trim()
-          ? f.content
-              .split('\n')
-              .filter((l) => l.trim())
-              .map((l) => ({ key: genKey(), text: l.trim(), isChecked: false }))
+        v === 'CHECKLIST'
+          ? (
+              f.checklistItems.length > 0
+                ? f.checklistItems
+                : textToChecklistParagraphs(f.content).map((item) => ({ ...item, key: genKey() })
+                )
+            )
           : f.checklistItems,
-      content: v === 'CHECKLIST' ? '' : f.content,
+      content:
+        v === 'CHECKLIST'
+          ? ''
+          : (
+              f.content.trim()
+                ? f.content
+                : checklistToBulletText(f.checklistItems)
+            ),
     }));
   }, [genKey]);
 
