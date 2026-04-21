@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   ScrollView,
@@ -43,6 +43,7 @@ export function EditNoteScreen({ noteId }: Props) {
   const [showLabels, setShowLabels] = useState(false);
   const [showDueModal, setShowDueModal] = useState(false);
   const [dueDraft, setDueDraft] = useState<Date>(new Date());
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
 
   // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
   const contentInputRef = useRef<TextInput>(null);
@@ -107,25 +108,32 @@ export function EditNoteScreen({ noteId }: Props) {
   }, [prepareForLabels]);
 
   const handleDueAtPress = useCallback(() => {
-    setDueDraft(form.dueAt ?? new Date());
+    const base = form.dueAt ?? new Date();
+    setDueDraft(base);
+    setCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1));
     setShowDueModal(true);
   }, [form.dueAt]);
 
-  const shiftDraftDays = useCallback((days: number) => {
-    setDueDraft((prev) => {
-      const next = new Date(prev);
-      next.setDate(next.getDate() + days);
-      return next;
-    });
+  const shiftCalendarMonth = useCallback((delta: number) => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
   }, []);
 
-  const shiftDraftMinutes = useCallback((minutes: number) => {
-    setDueDraft((prev) => {
-      const next = new Date(prev);
-      next.setMinutes(next.getMinutes() + minutes);
-      return next;
-    });
+  const shiftCalendarYear = useCallback((delta: number) => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear() + delta, prev.getMonth(), 1));
   }, []);
+
+  const calendarCells = useMemo(() => {
+    const firstOfMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const startOffset = firstOfMonth.getDay();
+    const startDate = new Date(firstOfMonth);
+    startDate.setDate(firstOfMonth.getDate() - startOffset);
+
+    return Array.from({ length: 42 }).map((_, idx) => {
+      const cell = new Date(startDate);
+      cell.setDate(startDate.getDate() + idx);
+      return cell;
+    });
+  }, [calendarMonth]);
 
   const colorScheme = useColorScheme();
   const theme       = useTheme();
@@ -281,31 +289,105 @@ export function EditNoteScreen({ noteId }: Props) {
         >
           <Text variant="titleMedium">期限を設定</Text>
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            日付と時刻を選択してください。
+            日付はカレンダー、時刻は時分の選択で設定できます。
           </Text>
           <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
             選択中: {formatDueDateTime(dueDraft)}
           </Text>
 
-          <View style={styles.pickerRow}>
-            <Text variant="labelLarge">日付</Text>
-            <View style={styles.inlineRow}>
-              <Button compact mode="outlined" onPress={() => shiftDraftDays(-1)}>前日</Button>
-              <Text style={styles.pickerValue}>{`${dueDraft.getFullYear()}/${`${dueDraft.getMonth() + 1}`.padStart(2, '0')}/${`${dueDraft.getDate()}`.padStart(2, '0')}`}</Text>
-              <Button compact mode="outlined" onPress={() => shiftDraftDays(1)}>翌日</Button>
-            </View>
+          <View style={styles.calendarHeader}>
+            <Button compact onPress={() => shiftCalendarYear(-1)}>-1年</Button>
+            <Button compact onPress={() => shiftCalendarMonth(-1)}>前月</Button>
+            <Text style={styles.calendarTitle}>{`${calendarMonth.getFullYear()}年 ${calendarMonth.getMonth() + 1}月`}</Text>
+            <Button compact onPress={() => shiftCalendarMonth(1)}>次月</Button>
+            <Button compact onPress={() => shiftCalendarYear(1)}>+1年</Button>
           </View>
 
-          <View style={styles.pickerRow}>
-            <Text variant="labelLarge">時刻</Text>
-            <View style={styles.inlineRow}>
-              <Button mode="outlined" compact onPress={() => shiftDraftMinutes(-30)}>-30分</Button>
-              <Text style={styles.pickerValue}>{`${`${dueDraft.getHours()}`.padStart(2, '0')}:${`${dueDraft.getMinutes()}`.padStart(2, '0')}`}</Text>
-              <Button mode="outlined" compact onPress={() => shiftDraftMinutes(30)}>+30分</Button>
-            </View>
+          <View style={styles.weekRow}>
+            {['日', '月', '火', '水', '木', '金', '土'].map((w) => (
+              <Text key={w} style={styles.weekCell}>{w}</Text>
+            ))}
           </View>
 
-          <Button mode="text" onPress={() => setDueDraft(new Date())}>現在日時にリセット</Button>
+          <View style={styles.calendarGrid}>
+            {calendarCells.map((cell) => {
+              const inMonth = cell.getMonth() === calendarMonth.getMonth();
+              const selected =
+                cell.getFullYear() === dueDraft.getFullYear() &&
+                cell.getMonth() === dueDraft.getMonth() &&
+                cell.getDate() === dueDraft.getDate();
+              return (
+                <Button
+                  key={cell.toISOString()}
+                  compact
+                  mode={selected ? 'contained' : 'text'}
+                  textColor={inMonth ? undefined : theme.colors.onSurfaceDisabled}
+                  onPress={() => {
+                    setDueDraft((prev) => {
+                      const next = new Date(prev);
+                      next.setFullYear(cell.getFullYear(), cell.getMonth(), cell.getDate());
+                      return next;
+                    });
+                  }}
+                  style={styles.dayCell}
+                >
+                  {cell.getDate()}
+                </Button>
+              );
+            })}
+          </View>
+
+          <Text variant="labelLarge">時</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inlineRow}>
+            {Array.from({ length: 24 }).map((_, hour) => {
+              const selected = dueDraft.getHours() === hour;
+              return (
+                <Button
+                  key={`h-${hour}`}
+                  compact
+                  mode={selected ? 'contained' : 'outlined'}
+                  onPress={() => setDueDraft((prev) => {
+                    const next = new Date(prev);
+                    next.setHours(hour);
+                    return next;
+                  })}
+                >
+                  {`${hour}`.padStart(2, '0')}
+                </Button>
+              );
+            })}
+          </ScrollView>
+
+          <Text variant="labelLarge">分</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inlineRow}>
+            {Array.from({ length: 12 }).map((_, idx) => {
+              const minute = idx * 5;
+              const selected = dueDraft.getMinutes() === minute;
+              return (
+                <Button
+                  key={`m-${minute}`}
+                  compact
+                  mode={selected ? 'contained' : 'outlined'}
+                  onPress={() => setDueDraft((prev) => {
+                    const next = new Date(prev);
+                    next.setMinutes(minute);
+                    return next;
+                  })}
+                >
+                  {`${minute}`.padStart(2, '0')}
+                </Button>
+              );
+            })}
+          </ScrollView>
+
+          <Button mode="text" onPress={() => {
+            const now = new Date();
+            setDueDraft(now);
+            setCalendarMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+          }}
+          >
+            現在日時にリセット
+          </Button>
 
           <View style={styles.dueActions}>
             <Button onPress={() => setShowDueModal(false)}>キャンセル</Button>
@@ -408,13 +490,36 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  pickerRow: {
-    gap: spacing.xs,
-  },
+  pickerRow: { gap: spacing.xs },
   inlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calendarTitle: {
+    fontWeight: '600',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  weekCell: {
+    width: 36,
+    textAlign: 'center',
+    color: '#9CA3AF',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  dayCell: {
+    width: 40,
   },
   pickerValue: {
     minWidth: 120,
