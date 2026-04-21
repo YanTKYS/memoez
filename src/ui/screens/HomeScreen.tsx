@@ -125,6 +125,10 @@ export function HomeScreen() {
           icon="label-outline"
           onPress={() => router.push('/labels')}
         />
+        <Appbar.Action
+          icon="database-export-outline"
+          onPress={() => router.push('/backup')}
+        />
       </Appbar.Header>
 
       {loading && notes.length === 0 ? (
