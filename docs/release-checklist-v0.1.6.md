@@ -37,5 +37,5 @@
 - [x] `npx tsc --noEmit`（2026-04-19 実施）
 - [x] `npm test -- --runInBand`（2026-04-19 実施）
 - [ ] Android ビルド（prebuild + assembleRelease）
-- [ ] `docs/release-notes-v0.1.6.md` 作成
-- [ ] `docs/github-release-v0.1.6.md` 作成
+- [x] `docs/release-notes-v0.1.6.md` 作成（2026-04-21 実施）
+- [x] `docs/github-release-v0.1.6.md` 作成（2026-04-21 実施）
