@@ -1,0 +1,14 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="#ECECEC"/>
+  <g stroke="#1F5DCB" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M200 100H824C892 100 948 156 948 224V712L708 924H200C132 924 76 868 76 800V224C76 156 132 100 200 100Z"/>
+    <path d="M708 924V804C708 748 752 704 808 704H948"/>
+    <path d="M260 100V24"/>
+    <path d="M502 100V24"/>
+    <path d="M744 100V24"/>
+    <path d="M172 430H676"/>
+    <path d="M172 540H660"/>
+    <path d="M172 650H530"/>
+  </g>
+  <text x="155" y="370" font-size="140" font-family="Arial, Helvetica, sans-serif" fill="#1F5DCB" font-weight="700" letter-spacing="1">EasyMEMO</text>
+</svg>

@@ -21,6 +21,12 @@ export function toNote(
     color:          row.color as NoteColor,
     isPinned:       Boolean(row.isPinned),
     isArchived:     Boolean(row.isArchived),
+    dueAt:          row.dueAt
+                      ? (row.dueAt instanceof Date ? row.dueAt : new Date(row.dueAt))
+                      : null,
+    reminderAt:     row.reminderAt
+                      ? (row.reminderAt instanceof Date ? row.reminderAt : new Date(row.reminderAt))
+                      : null,
     sortWeight:     row.sortWeight,
     createdAt:      row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
     updatedAt:      row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
