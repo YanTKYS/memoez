@@ -4,7 +4,7 @@
     "slug": "memoez",
     "version": "0.1.5",
     "orientation": "portrait",
-    "icon": "./assets/icon-easymemo.svg",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon-easymemo.svg",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.memoez.app",
