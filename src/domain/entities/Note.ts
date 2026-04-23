@@ -12,6 +12,8 @@ export interface Note {
   color:          NoteColor;
   isPinned:       boolean;
   isArchived:     boolean;
+  dueAt:          Date | null;
+  reminderAt:     Date | null;
   sortWeight:     number;
   createdAt:      Date;
   updatedAt:      Date;

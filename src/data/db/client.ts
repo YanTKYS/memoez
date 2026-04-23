@@ -32,7 +32,22 @@ export async function initDatabase(): Promise<void> {
   _db = drizzle(sqlite, { schema });
 
   // 既存ノートに serverId が未設定のものがあれば一括生成（同期対応準備）
+  await migrateNoteDueColumns(sqlite);
   await migrateServerIds();
+}
+
+/** 既存DBへ due_at / reminder_at を後方互換で追加する */
+async function migrateNoteDueColumns(sqlite: SQLite.SQLiteDatabase): Promise<void> {
+  const columns = sqlite.getAllSync<{ name: string }>(`PRAGMA table_info('notes')`);
+  const columnNames = new Set(columns.map((col) => col.name));
+
+  if (!columnNames.has('due_at')) {
+    sqlite.execSync('ALTER TABLE notes ADD COLUMN due_at INTEGER');
+  }
+
+  if (!columnNames.has('reminder_at')) {
+    sqlite.execSync('ALTER TABLE notes ADD COLUMN reminder_at INTEGER');
+  }
 }
 
 /** アップデート時に既存ノートへ serverId を付与する */

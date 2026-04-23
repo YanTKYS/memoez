@@ -8,11 +8,33 @@ export interface DraftChecklistItem {
   isChecked: boolean;
 }
 
+export function textToChecklistParagraphs(text: string): DraftChecklistItem[] {
+  return text
+    .split(/\n\s*\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, idx) => ({
+      key: `parsed-${idx}`,
+      text: block.replace(/\n+/g, ' ').trim(),
+      isChecked: false,
+    }));
+}
+
+export function checklistToBulletText(items: DraftChecklistItem[]): string {
+  return items
+    .map((item) => item.text.trim())
+    .filter(Boolean)
+    .map((text) => `• ${text}`)
+    .join('\n');
+}
+
 export interface NoteFormState {
   title:          string;
   content:        string;
   type:           NoteType;
   color:          NoteColor;
+  dueAt:          Date | null;
+  reminderAt:     Date | null;
   checklistItems: DraftChecklistItem[];
 }
 
@@ -22,6 +44,7 @@ export interface UseNoteFormReturn {
   setContent:          (v: string) => void;
   setType:             (v: NoteType) => void;
   setColor:            (v: NoteColor) => void;
+  setDueAt:            (v: Date | null) => void;
   addChecklistItem:    () => void;
   updateChecklistItem: (key: string, text: string) => void;
   toggleChecklistItem: (key: string) => void;
@@ -39,6 +62,8 @@ function noteToForm(note: Note): NoteFormState {
     content: note.content,
     type:    note.type,
     color:   note.color,
+    dueAt:   note.dueAt,
+    reminderAt: note.reminderAt,
     checklistItems: note.checklistItems.map((item) => ({
       key:       String(item.id),
       text:      item.text,
@@ -52,6 +77,8 @@ const defaultForm = (): NoteFormState => ({
   content:        '',
   type:           'TEXT',
   color:          'NONE',
+  dueAt:          null,
+  reminderAt:     null,
   checklistItems: [],
 });
 
@@ -75,17 +102,27 @@ export function useNoteForm(): UseNoteFormReturn {
       ...f,
       type: v,
       checklistItems:
-        v === 'CHECKLIST' && f.checklistItems.length === 0 && f.content.trim()
-          ? f.content
-              .split('\n')
-              .filter((l) => l.trim())
-              .map((l) => ({ key: genKey(), text: l.trim(), isChecked: false }))
+        v === 'CHECKLIST'
+          ? (
+              f.checklistItems.length > 0
+                ? f.checklistItems
+                : textToChecklistParagraphs(f.content).map((item) => ({ ...item, key: genKey() })
+                )
+            )
           : f.checklistItems,
-      content: v === 'CHECKLIST' ? '' : f.content,
+      content:
+        v === 'CHECKLIST'
+          ? ''
+          : (
+              f.content.trim()
+                ? f.content
+                : checklistToBulletText(f.checklistItems)
+            ),
     }));
   }, [genKey]);
 
   const setColor = useCallback((v: NoteColor) => setForm((f) => ({ ...f, color: v })), []);
+  const setDueAt = useCallback((v: Date | null) => setForm((f) => ({ ...f, dueAt: v })), []);
 
   const addChecklistItem = useCallback(() => {
     const key = genKey();
@@ -140,6 +177,7 @@ export function useNoteForm(): UseNoteFormReturn {
     setContent,
     setType,
     setColor,
+    setDueAt,
     addChecklistItem,
     updateChecklistItem,
     toggleChecklistItem,
