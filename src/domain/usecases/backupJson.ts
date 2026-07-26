@@ -16,7 +16,7 @@ export interface BackupNoteItem {
   reminderAt: string | null;
   createdAt: string;
   labels: string[];
-  checklistItems: Array<{ text: string; isChecked: boolean; position: number }>;
+  checklistItems: { text: string; isChecked: boolean; position: number }[];
 }
 
 export interface BackupPayload {
@@ -55,6 +55,61 @@ function noteFingerprint(input: BackupNoteItem): string {
   });
 }
 
+const NOTE_TYPES: readonly Note['type'][] = ['TEXT', 'CHECKLIST'];
+const NOTE_COLORS: readonly Note['color'][] = [
+  'NONE', 'RED', 'ORANGE', 'YELLOW', 'GREEN', 'TEAL', 'BLUE', 'PURPLE',
+];
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function asIsoDateOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : value;
+}
+
+/**
+ * 外部ファイル由来の 1 件を安全な形に正規化する。
+ * 途中で例外が飛ぶとインポートが中断され、DB が中途半端な状態で残るため
+ * 欠損・型違いは既定値で埋める。
+ */
+export function normalizeBackupItem(raw: unknown): BackupNoteItem {
+  const item = (raw ?? {}) as Record<string, unknown>;
+  const type = NOTE_TYPES.find((t) => t === item.type) ?? 'TEXT';
+  const color = NOTE_COLORS.find((c) => c === item.color) ?? 'NONE';
+  const labels = Array.isArray(item.labels)
+    ? item.labels.filter((l): l is string => typeof l === 'string' && l.trim() !== '')
+    : [];
+  const checklistItems = Array.isArray(item.checklistItems)
+    ? item.checklistItems.map((entry, idx) => {
+        const i = (entry ?? {}) as Record<string, unknown>;
+        return {
+          text: asString(i.text),
+          isChecked: i.isChecked === true,
+          position: typeof i.position === 'number' && Number.isFinite(i.position)
+            ? i.position
+            : idx * 1000,
+        };
+      })
+    : [];
+
+  return {
+    title: asString(item.title),
+    content: asString(item.content),
+    type,
+    color,
+    isPinned: item.isPinned === true,
+    isArchived: item.isArchived === true,
+    dueAt: asIsoDateOrNull(item.dueAt),
+    reminderAt: asIsoDateOrNull(item.reminderAt),
+    createdAt: asIsoDateOrNull(item.createdAt) ?? new Date().toISOString(),
+    labels,
+    checklistItems,
+  };
+}
+
 function parsePayload(raw: string): BackupPayload {
   let parsed: unknown;
   try {
@@ -63,14 +118,14 @@ function parsePayload(raw: string): BackupPayload {
     throw new Error('JSONの解析に失敗しました');
   }
 
-  const data = parsed as Partial<BackupPayload>;
+  const data = (parsed ?? {}) as Partial<BackupPayload>;
   if (data.version !== '1.0' || !Array.isArray(data.notes)) {
     throw new Error('バックアップ形式が不正です');
   }
   return {
     version: '1.0',
     exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : new Date().toISOString(),
-    notes: data.notes,
+    notes: data.notes.map(normalizeBackupItem),
   };
 }
 

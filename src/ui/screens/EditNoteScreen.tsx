@@ -32,6 +32,7 @@ import { useEditNote } from '@/ui/hooks/useEditNote';
 import { ColorPicker } from '@/ui/components/common/ColorPicker';
 import { LabelPickerSheet } from '@/ui/components/common/LabelPickerSheet';
 import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
+import { buildDueDatePresets, type DueDatePreset } from '@/ui/hooks/dueDatePresets';
 
 interface Props {
   noteId?: number;
@@ -44,6 +45,7 @@ export function EditNoteScreen({ noteId }: Props) {
   const [showDueModal, setShowDueModal] = useState(false);
   const [dueDraft, setDueDraft] = useState<Date>(new Date());
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [duePresets, setDuePresets] = useState<DueDatePreset[]>([]);
 
   // contentInput の ref（タイトルの returnKeyType="next" でフォーカス移動するため）
   const contentInputRef = useRef<TextInput>(null);
@@ -111,8 +113,14 @@ export function EditNoteScreen({ noteId }: Props) {
     const base = form.dueAt ?? new Date();
     setDueDraft(base);
     setCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+    setDuePresets(buildDueDatePresets(new Date()));
     setShowDueModal(true);
   }, [form.dueAt]);
+
+  const applyDuePreset = useCallback((preset: DueDatePreset) => {
+    setDueAt(preset.value);
+    setShowDueModal(false);
+  }, [setDueAt]);
 
   const shiftCalendarMonth = useCallback((delta: number) => {
     setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
@@ -294,6 +302,20 @@ export function EditNoteScreen({ noteId }: Props) {
           <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
             選択中: {formatDueDateTime(dueDraft)}
           </Text>
+
+          <View style={styles.presetRow}>
+            {duePresets.map((preset) => (
+              <Button
+                key={preset.label}
+                compact
+                mode={preset.destructive ? 'text' : 'outlined'}
+                textColor={preset.destructive ? theme.colors.error : undefined}
+                onPress={() => applyDuePreset(preset)}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </View>
 
           <View style={styles.calendarHeader}>
             <Button compact onPress={() => shiftCalendarYear(-1)}>-1年</Button>
@@ -485,12 +507,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: spacing.sm,
   },
-  adjustRow: {
+  presetRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  pickerRow: { gap: spacing.xs },
   inlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -520,11 +541,6 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     width: 40,
-  },
-  pickerValue: {
-    minWidth: 120,
-    textAlign: 'center',
-    fontWeight: '600',
   },
   dueActions: {
     flexDirection: 'row',

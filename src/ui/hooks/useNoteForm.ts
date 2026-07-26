@@ -56,7 +56,7 @@ export interface UseNoteFormReturn {
   lastAddedKey:        string | null;
 }
 
-function noteToForm(note: Note): NoteFormState {
+export function noteToForm(note: Note): NoteFormState {
   return {
     title:   note.title,
     content: note.content,
@@ -70,6 +70,26 @@ function noteToForm(note: Note): NoteFormState {
       isChecked: item.isChecked,
     })),
   };
+}
+
+/**
+ * 保存対象になる値だけを取り出した比較用スナップショット。
+ * 変更がないまま自動保存が走ると updatedAt だけが更新され、
+ * 「開いただけのメモ」が一覧の先頭に移動してしまうため、その抑止に使う。
+ */
+export function noteFormSnapshot(form: NoteFormState): string {
+  return JSON.stringify({
+    title:   form.title,
+    content: form.content,
+    type:    form.type,
+    color:   form.color,
+    dueAt:      form.dueAt?.getTime() ?? null,
+    reminderAt: form.reminderAt?.getTime() ?? null,
+    // 空アイテムは保存時に捨てられるので比較対象からも外す
+    checklistItems: form.checklistItems
+      .filter((i) => i.text.trim())
+      .map((i) => [i.text, i.isChecked]),
+  });
 }
 
 const defaultForm = (): NoteFormState => ({
