@@ -164,3 +164,4 @@ memoez/
 | [docs/architecture.md](docs/architecture.md) | アーキテクチャ概要・レイヤー設計・DI・データフロー |
 | [docs/database.md](docs/database.md) | DB設計・テーブル定義・マイグレーション方針 |
 | [docs/ci-cd.md](docs/ci-cd.md) | CI/CD ワークフロー・署名設定手順 |
+| [docs/release-note.md](docs/release-note.md) | 全バージョンのリリースノート（新しい順） |
