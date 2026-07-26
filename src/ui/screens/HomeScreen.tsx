@@ -101,7 +101,7 @@ export function HomeScreen() {
     return (
       <NoteCard note={item.note} onPress={openNote} isGrid={false} />
     );
-  }, [colGap, cardWidth, numCols, openNote]);
+  }, [colGap, cardWidth, numCols, openNote, theme.colors.onSurfaceVariant]);
 
   const keyExtractor = useCallback((item: SectionItem, index: number) => {
     if (item.kind === 'header')   return `header-${index}`;

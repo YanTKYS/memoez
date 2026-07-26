@@ -14,6 +14,8 @@ type Params = {
   saveNote: () => Promise<void>;
   formType: NoteType;
   formColor: NoteColor;
+  /** ラベル付与のために空メモを自動生成したことを呼び出し元へ通知する */
+  onPlaceholderCreated?: () => void;
 };
 
 export function computeNextLabels(current: Label[], target: Label, attached: boolean): Label[] {
@@ -31,6 +33,7 @@ export function useNoteLabelActions({
   saveNote,
   formType,
   formColor,
+  onPlaceholderCreated,
 }: Params) {
   const fetchLabels = useCallback((): Promise<Label[]> =>
     getLabelRepository().findAll(), []);
@@ -62,6 +65,7 @@ export function useNoteLabelActions({
           const created = await getNoteRepository().create({
             title: '', content: '', type: formType, color: formColor,
           });
+          onPlaceholderCreated?.();
           if (mountedRef.current) setNote(created);
         } catch (e) {
           console.error('prepareForLabels create error:', e);
@@ -69,7 +73,7 @@ export function useNoteLabelActions({
       }
     }
     return mountedRef.current;
-  }, [note, saveTimerRef, isEmpty, saveNote, formType, formColor, mountedRef, setNote]);
+  }, [note, saveTimerRef, isEmpty, saveNote, formType, formColor, mountedRef, setNote, onPlaceholderCreated]);
 
   return { fetchLabels, toggleNoteLabel, prepareForLabels };
 }

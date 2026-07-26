@@ -71,8 +71,8 @@ MemoEZ はレイヤードアーキテクチャ + Repository パターンを採�
 
 ### data レイヤー (`src/data/`)
 
-- **db/schema.ts**: Drizzle のテーブル定義と `BOOTSTRAP_SQL`（FTS 仮想テーブルのトリガーなど、Drizzle が生成できない SQL）。
-- **db/client.ts**: SQLite DB の初期化・シングルトン管理。起動時に `migrateServerIds()` を呼び出し、既存ノートへの `serverId` 補完も行う。
+- **db/schema.ts**: Drizzle のテーブル定義と `BOOTSTRAP_SQL`（起動時に冪等実行する DDL）。テーブル定義の唯一の真実。
+- **db/client.ts**: SQLite DB の初期化・シングルトン管理。起動時に `migrateNoteDueColumns()` / `migrateServerIds()` を呼び出し、旧バージョンの DB への追従も行う。
 - **repositories/**: `INoteRepository`・`ILabelRepository` の Drizzle 実装。SQL はすべてここに閉じる。
 - **mappers/**: DB の行データ（snake_case）をドメインエンティティ（camelCase）に変換する純粋関数。
 
@@ -85,7 +85,7 @@ MemoEZ はレイヤードアーキテクチャ + Repository パターンを採�
 
 ### グローバルストア (`src/store/`)
 
-- **settingsStore.ts**: Zustand によるテーマ設定（ダーク / ライト）などの永続的なグローバル状態。AsyncStorage でデバイスに永続化。
+- **settingsStore.ts**: Zustand による表示設定（一覧のグリッド / リスト切り替え）などの永続的なグローバル状態。AsyncStorage でデバイスに永続化。ダーク / ライトの配色は端末設定（`useColorScheme()`）に追従するため、ストアには持たない。
 
 ## DI の設計
 

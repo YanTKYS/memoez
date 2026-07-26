@@ -38,7 +38,7 @@ export interface INoteRepository {
   /** チェックリストアイテムを更新し、最新の Note を返す */
   updateChecklistItems(
     noteId: number,
-    items: Array<{ id?: number; text: string; isChecked: boolean; position: number }>,
+    items: { id?: number; text: string; isChecked: boolean; position: number }[],
   ): Promise<Note>;
   maxSortWeight(): Promise<number>;
 

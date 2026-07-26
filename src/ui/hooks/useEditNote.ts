@@ -4,8 +4,13 @@ import { useRouter } from 'expo-router';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
 import { reminderScheduler } from '@/lib/reminderScheduler';
-import { useNoteForm } from './useNoteForm';
+import { noteFormSnapshot, noteToForm, useNoteForm } from './useNoteForm';
 import { useNoteLabelActions } from './useNoteLabelActions';
+
+/** 入力が止まってから保存するまでの待ち時間 */
+const AUTOSAVE_DELAY_MS = 1000;
+/** 「保存しました」表示を消すまでの時間 */
+const SAVED_FEEDBACK_MS = 3000;
 
 export function useEditNote(noteId?: number) {
   const router = useRouter();
@@ -21,10 +26,21 @@ export function useEditNote(noteId?: number) {
   const saveTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedFeedbackRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef         = useRef(false);
+  // 保存中に届いた変更を取りこぼさないためのフラグ
+  const pendingSaveRef    = useRef(false);
+  // 最後に永続化した内容。差分がなければ保存をスキップする
+  const savedSnapshotRef  = useRef<string | null>(null);
+  // ラベル付与のために自動生成した空メモかどうか
+  const placeholderRef    = useRef(false);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
+  useEffect(() => {
+    // StrictMode / Fast Refresh で effect が再実行されても
+    // マウント済みとして扱えるよう、毎回 true に戻す
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
+    };
   }, []);
 
   const noteForm = useNoteForm();
@@ -37,7 +53,11 @@ export function useEditNote(noteId?: number) {
       .findById(noteId)
       .then((n) => {
         if (!mountedRef.current) return;
-        if (n) { setNote(n); resetForm(n); }
+        if (n) {
+          setNote(n);
+          resetForm(n);
+          savedSnapshotRef.current = noteFormSnapshot(noteToForm(n));
+        }
         setLoading(false);
       })
       .catch(() => {
@@ -45,12 +65,19 @@ export function useEditNote(noteId?: number) {
         setLoadError('メモを読み込めませんでした');
         setLoading(false);
       });
-  }, [noteId]); // resetForm は安定した useCallback なので deps 省略安全
+  }, [noteId, resetForm]);
 
   // ─── 保存ロジック ────────────────────────────────────────────────────────
+  // 常に最新の saveNote を指す ref（保存完了後の再実行に使う）
+  const saveNoteRef = useRef<() => Promise<void>>(async () => {});
+
   const saveNote = useCallback(async (): Promise<void> => {
-    if (savingRef.current) return;
+    // 保存中に呼ばれた分は破棄せず、完了後に再スケジュールする
+    if (savingRef.current) { pendingSaveRef.current = true; return; }
     if (isEmpty())         return;
+
+    const snapshot = noteFormSnapshot(form);
+    if (snapshot === savedSnapshotRef.current) return; // 変更なし
 
     savingRef.current = true;
     if (mountedRef.current) setSaving(true);
@@ -96,14 +123,17 @@ export function useEditNote(noteId?: number) {
         }
       }
 
-      // 保存成功フィードバック（3秒後にクリア）
+      savedSnapshotRef.current = snapshot;
+      placeholderRef.current = false;
+
+      // 保存成功フィードバック
       if (mountedRef.current) {
         const now = new Date();
         setLastSavedAt(now);
         if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
         savedFeedbackRef.current = setTimeout(() => {
           if (mountedRef.current) setLastSavedAt(null);
-        }, 3000);
+        }, SAVED_FEEDBACK_MS);
       }
     } catch (e) {
       console.error('saveNote error:', e);
@@ -111,25 +141,44 @@ export function useEditNote(noteId?: number) {
     } finally {
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
+      // 保存中に届いた変更を、最新の form を持つ saveNote で保存し直す
+      if (pendingSaveRef.current && mountedRef.current) {
+        pendingSaveRef.current = false;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) saveNoteRef.current();
+        }, AUTOSAVE_DELAY_MS);
+      }
     }
   }, [form, note, isEmpty]);
 
-  // ─── 自動保存 (debounce 1秒) ─────────────────────────────────────────────
+  saveNoteRef.current = saveNote;
+
+  // ─── 自動保存 (debounce) ─────────────────────────────────────────────────
   useEffect(() => {
     if (loading) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       if (mountedRef.current) saveNote();
-    }, 1000);
+    }, AUTOSAVE_DELAY_MS);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [loading, saveNote]);
 
   // ─── 保存して戻る（stableBack 経由で BackHandler に渡す） ────────────────
   const handleBack = useCallback(async () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    if (!isEmpty()) await saveNote();
+    if (!isEmpty()) {
+      await saveNote();
+    } else if (note && placeholderRef.current && note.labels.length === 0) {
+      // ラベル選択のために自動生成した空メモを、一覧に残さず後始末する
+      try {
+        await getNoteRepository().delete(note.id);
+      } catch (e) {
+        console.error('discard placeholder note error:', e);
+      }
+    }
     router.back();
-  }, [isEmpty, saveNote, router]);
+  }, [isEmpty, saveNote, note, router]);
 
   const handleBackRef = useRef(handleBack);
   handleBackRef.current = handleBack;
@@ -167,6 +216,8 @@ export function useEditNote(noteId?: number) {
     if (mountedRef.current) setNote(updated);
   }, [note]);
 
+  const markPlaceholder = useCallback(() => { placeholderRef.current = true; }, []);
+
   const { fetchLabels, toggleNoteLabel, prepareForLabels } = useNoteLabelActions({
     note,
     setNote,
@@ -176,6 +227,7 @@ export function useEditNote(noteId?: number) {
     saveNote,
     formType: form.type,
     formColor: form.color,
+    onPlaceholderCreated: markPlaceholder,
   });
 
   return {

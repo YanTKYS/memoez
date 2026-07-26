@@ -93,12 +93,19 @@ export function SearchScreen() {
       ) : results.length === 0 ? (
         <EmptyState
           icon="note-search-outline"
-          title={`"${query}" は見つかりませんでした`}
-          message="別のキーワードで試してみてください"
+          title={
+            query.trim()
+              ? `"${query.trim()}" は見つかりませんでした`
+              : 'このラベルのメモはありません'
+          }
+          message={
+            query.trim()
+              ? '別のキーワードで試してみてください'
+              : '別のラベルで試してみてください'
+          }
         />
       ) : (
         <FlatList
-          key={query}
           data={results}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}

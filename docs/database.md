@@ -1,6 +1,6 @@
 # データベース設計
 
-MemoEZ は `expo-sqlite` と Drizzle ORM を使用してデバイスローカルに SQLite データベースを管理します。FTS5（全文検索）も有効化しています。
+MemoEZ は `expo-sqlite` と Drizzle ORM を使用してデバイスローカルに SQLite データベースを管理します。
 
 ## DB 初期化フロー
 
@@ -12,29 +12,30 @@ MemoEZ は `expo-sqlite` と Drizzle ORM を使用してデバイスローカル
   ▼
 initDatabase()   ← src/data/db/client.ts
   │
-  ├─ SQLite DB をオープン（expo-sqlite）
+  ├─ SQLite DB をオープン（expo-sqlite / memoez.db）
   ├─ PRAGMA journal_mode = WAL
   ├─ PRAGMA foreign_keys = ON
   ├─ BOOTSTRAP_SQL を実行
-  │    └─ FTS5 仮想テーブル (notes_fts) の作成
-  │    └─ notes への INSERT/UPDATE/DELETE トリガー作成
-  ├─ Drizzle マイグレーション実行（migrations/ 以下の SQL ファイル）
+  │    └─ テーブル・インデックスを CREATE ... IF NOT EXISTS で作成
+  ├─ migrateNoteDueColumns()
+  │    └─ 旧バージョンの DB に due_at / reminder_at を ALTER TABLE で追加
+  ├─ drizzle インスタンス生成
   │
   └─ migrateServerIds()
        └─ server_id が NULL のノートに UUID v4 を一括補完
 ```
 
+### migrateNoteDueColumns()
+
+`due_at` / `reminder_at` は後から追加されたカラムです。`BOOTSTRAP_SQL` の `CREATE TABLE IF NOT EXISTS` は既存テーブルには効かないため、`PRAGMA table_info('notes')` でカラムの有無を確認し、無ければ `ALTER TABLE` で追加します。drizzle インスタンスを生成する前に実行します。
+
 ### migrateServerIds()
 
-`serverId` カラムは同期拡張のために後から追加されたため、既存ノートには `NULL` が入っている可能性があります。`migrateServerIds()` は起動時に一度だけ実行され、`server_id IS NULL` のレコードを検出して UUID v4 を補完します。
-
-```sql
-UPDATE notes
-SET server_id = '<uuid>'
-WHERE server_id IS NULL;
-```
+`serverId` カラムは同期拡張のために後から追加されたため、既存ノートには `NULL` が入っている可能性があります。`migrateServerIds()` は起動時に実行され、`server_id IS NULL` のレコードを検出して 1 件ずつ UUID v4 を補完します（値がレコードごとに異なるため、単一の UPDATE 文にはできません）。件数分の UPDATE は 1 トランザクションにまとめてコミットします。
 
 ## テーブル定義
+
+正となる定義は `src/data/db/schema.ts`（Drizzle 定義 + `BOOTSTRAP_SQL`）です。
 
 ### `notes`
 
@@ -42,16 +43,19 @@ WHERE server_id IS NULL;
 
 | カラム | 型 | 説明 |
 |--------|-----|------|
-| `id` | TEXT (PK) | UUID v4。クライアント生成 |
+| `id` | INTEGER (PK) | AUTOINCREMENT |
 | `title` | TEXT | メモのタイトル（空文字可） |
 | `content` | TEXT | メモ本文（空文字可） |
-| `color` | TEXT | メモのカラーコード（hex 文字列） |
+| `type` | TEXT | `'TEXT'` / `'CHECKLIST'` |
+| `color` | TEXT | `'NONE'`〜`'PURPLE'` の色名。実際の色値は `ui/theme/colors.ts` が持つ |
 | `is_pinned` | INTEGER | ピン留め状態。1 = ピン留め / 0 = 通常 |
-| `sort_weight` | REAL | ピン留めソートの重み。`sortWeight.ts` で計算 |
-| `is_checklist` | INTEGER | チェックリスト形式フラグ。1 = チェックリスト |
-| `deleted_at` | INTEGER | 論理削除日時（Unix ミリ秒）。NULL = 通常メモ |
+| `is_archived` | INTEGER | アーカイブ状態。1 = アーカイブ済み |
+| `due_at` | INTEGER | 期限（Unix ミリ秒）。NULL = 期限なし |
+| `reminder_at` | INTEGER | リマインド日時（Unix ミリ秒）。NULL の場合は `due_at` を使用 |
+| `sort_weight` | REAL | 並び順の重み。`lib/sortWeight.ts` で計算 |
 | `created_at` | INTEGER | 作成日時（Unix ミリ秒） |
 | `updated_at` | INTEGER | 更新日時（Unix ミリ秒） |
+| `deleted_at` | INTEGER | 論理削除日時（Unix ミリ秒）。NULL = 通常メモ |
 | `server_id` | TEXT | サーバー同期用 UUID。将来の同期拡張に使用 |
 | `synced_at` | INTEGER | 最終同期日時（Unix ミリ秒）。NULL = 未同期 |
 
@@ -61,13 +65,13 @@ WHERE server_id IS NULL;
 
 | カラム | 型 | 説明 |
 |--------|-----|------|
-| `id` | TEXT (PK) | UUID v4 |
-| `note_id` | TEXT (FK) | 親ノードの `notes.id` |
+| `id` | INTEGER (PK) | AUTOINCREMENT |
+| `note_id` | INTEGER (FK) | 親ノートの `notes.id`（ON DELETE CASCADE） |
 | `text` | TEXT | チェックアイテムのテキスト |
 | `is_checked` | INTEGER | チェック状態。1 = チェック済み / 0 = 未チェック |
 | `position` | INTEGER | 表示順序 |
 | `created_at` | INTEGER | 作成日時（Unix ミリ秒） |
-| `updated_at` | INTEGER | 更新日時（Unix ミリ秒） |
+| `deleted_at` | INTEGER | 論理削除日時（Unix ミリ秒） |
 
 ### `labels`
 
@@ -75,11 +79,11 @@ WHERE server_id IS NULL;
 
 | カラム | 型 | 説明 |
 |--------|-----|------|
-| `id` | TEXT (PK) | UUID v4 |
-| `name` | TEXT (UNIQUE) | ラベル名。重複不可 |
-| `color` | TEXT | ラベルのカラーコード |
+| `id` | INTEGER (PK) | AUTOINCREMENT |
+| `name` | TEXT | ラベル名。未削除のものは部分ユニークインデックスで重複不可 |
 | `created_at` | INTEGER | 作成日時（Unix ミリ秒） |
 | `updated_at` | INTEGER | 更新日時（Unix ミリ秒） |
+| `deleted_at` | INTEGER | 論理削除日時（Unix ミリ秒） |
 
 ### `note_labels`（中間テーブル）
 
@@ -87,32 +91,47 @@ WHERE server_id IS NULL;
 
 | カラム | 型 | 説明 |
 |--------|-----|------|
-| `note_id` | TEXT (FK) | `notes.id` |
-| `label_id` | TEXT (FK) | `labels.id` |
+| `note_id` | INTEGER (FK) | `notes.id`（ON DELETE CASCADE） |
+| `label_id` | INTEGER (FK) | `labels.id`（ON DELETE CASCADE） |
 
 複合主キー: `(note_id, label_id)`
 
-### `notes_fts`（FTS5 仮想テーブル）
+### インデックス
 
-全文検索用の仮想テーブルです。`BOOTSTRAP_SQL` で作成されます。
+| 名前 | 対象 |
+|------|------|
+| `idx_notes_updated_at` | `notes(updated_at DESC)` |
+| `idx_notes_is_pinned` | `notes(is_pinned DESC, sort_weight DESC)` |
+| `idx_checklist_note_id` | `checklist_items(note_id, position ASC)` |
+| `idx_labels_name` | `labels(name) WHERE deleted_at IS NULL`（部分ユニーク） |
+| `idx_note_labels_label_id` | `note_labels(label_id)` |
 
-```sql
-CREATE VIRTUAL TABLE notes_fts USING fts5(
-  id UNINDEXED,
-  title,
-  content,
-  content='notes',
-  content_rowid='rowid'
-);
-```
+## 検索の実装
 
-`notes` テーブルへの INSERT / UPDATE / DELETE トリガーにより自動で同期されます。
+全文検索（FTS5）は未導入で、`DrizzleNoteRepository.search()` による `LIKE '%keyword%'` の部分一致検索です。検索対象は「タイトル」「本文」「チェックリストアイテムのテキスト」「ラベル名」です。
+
+ユーザー入力は `lib/likePattern.ts` の `containsPattern()` でエスケープしてから埋め込み、`ESCAPE '\'` を付与します。これがないと `%` や `_` がワイルドカードとして解釈され、「100%」の検索が全件ヒットしてしまいます。
+
+FTS5 自体は `app.json` の expo-sqlite プラグイン設定（`enableFTS: true`）でビルドに含めているため、将来的に仮想テーブルへ移行することは可能です。
 
 ## マイグレーション方針
 
-### Drizzle Kit による自動生成
+### BOOTSTRAP_SQL（実際に実行される DDL）
 
-スキーマ変更は `src/data/db/schema.ts` を編集した後、以下のコマンドで SQL ファイルを生成します。
+テーブル・インデックスの DDL は `schema.ts` の `BOOTSTRAP_SQL` 定数に配列で保持し、`initDatabase()` が毎回 `IF NOT EXISTS` 付きで実行します。これにより冪等性が保たれます。既存テーブルへのカラム追加は `IF NOT EXISTS` では対応できないため、`client.ts` の `migrateNoteDueColumns()` のように個別の ALTER 処理を追加します。
+
+```typescript
+// src/data/db/schema.ts
+export const BOOTSTRAP_SQL: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS notes (...)`,
+  `CREATE TABLE IF NOT EXISTS checklist_items (...)`,
+  // ...
+];
+```
+
+### Drizzle Kit による SQL 生成
+
+スキーマ変更時は `src/data/db/schema.ts` を編集した後、以下で SQL ファイルを生成できます。
 
 ```bash
 npm run generate
@@ -120,31 +139,13 @@ npm run generate
 # src/data/db/migrations/ に SQL ファイルが追加されます
 ```
 
-### BOOTSTRAP_SQL の役割
-
-Drizzle が生成できない SQL（FTS 仮想テーブル・トリガー等）は `schema.ts` の `BOOTSTRAP_SQL` 定数に記述し、`initDatabase()` で毎回 `IF NOT EXISTS` 付きで実行します。これにより冪等性が保たれます。
-
-```typescript
-// src/data/db/schema.ts
-export const BOOTSTRAP_SQL = `
-  CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(...);
-  CREATE TRIGGER IF NOT EXISTS notes_fts_insert ...;
-  CREATE TRIGGER IF NOT EXISTS notes_fts_update ...;
-  CREATE TRIGGER IF NOT EXISTS notes_fts_delete ...;
-`;
-```
-
-### マイグレーションファイルの管理
-
-- `src/data/db/migrations/` 以下に連番の SQL ファイルとして管理
-- Drizzle の `migrate()` 関数がアプリ起動時に未適用ファイルを自動実行
-- 一度適用したマイグレーションは変更しない（新しいファイルを追加する）
+`src/data/db/migrations/` の SQL は現状アプリ実行時には読み込まれません（`migrate()` は呼んでいません）。スキーマ変更履歴の記録用であり、実行される DDL は `BOOTSTRAP_SQL` 側です。両者を必ず同時に更新してください。
 
 ## 論理削除と物理削除の使い分け
 
 ### 論理削除（ソフトデリート）
 
-`notes.deleted_at` カラムに削除日時を設定することで削除済みとして扱います。
+`deleted_at` カラムに削除日時を設定することで削除済みとして扱います。
 
 ```sql
 -- 論理削除
@@ -166,7 +167,7 @@ SELECT * FROM notes WHERE deleted_at IS NULL;
 
 | 操作 | 方式 | 理由 |
 |------|------|------|
-| 一般的な削除 | 論理削除 | 誤削除の復元・将来のサーバー同期での tombstone 活用 |
+| メモの削除 | 論理削除 | 誤削除の復元・将来のサーバー同期での tombstone 活用 |
 | 完全削除 | 物理削除 | プライバシー配慮・ストレージ解放 |
-| チェックリストアイテムの削除 | 物理削除 | 親ノートの削除に従属するため論理削除不要 |
-| ラベルの削除 | 物理削除 | `note_labels` の CASCADE DELETE で関連を自動削除 |
+| チェックリストアイテムの更新 | 論理削除 → 次回更新時に物理削除 | 保存のたびに全行を作り直すため、墓石行は 1 世代だけ残して物理削除する |
+| ラベルの削除 | 論理削除 | 参照している `note_labels` を残したまま一覧から外す |

@@ -2,7 +2,7 @@ import type { Label } from '@/domain/entities/Label';
 import type { Note } from '@/domain/entities/Note';
 import type { ILabelRepository } from '@/domain/repositories/ILabelRepository';
 import type { INoteRepository, CreateNoteInput, UpdateNoteInput } from '@/domain/repositories/INoteRepository';
-import { exportBackupJson, importBackupJson } from '@/domain/usecases/backupJson';
+import { exportBackupJson, importBackupJson, normalizeBackupItem } from '@/domain/usecases/backupJson';
 
 class FakeLabelRepo implements ILabelRepository {
   private labels: Label[] = [];
@@ -103,7 +103,7 @@ class FakeNoteRepo implements INoteRepository {
     note.labels.push({ id: labelId, name: `L-${labelId}`, createdAt: new Date(), updatedAt: new Date(), deletedAt: null });
   }
   async detachLabel(): Promise<void> {}
-  async updateChecklistItems(noteId: number, items: Array<{ id?: number; text: string; isChecked: boolean; position: number }>): Promise<Note> {
+  async updateChecklistItems(noteId: number, items: { id?: number; text: string; isChecked: boolean; position: number }[]): Promise<Note> {
     const note = await this.findById(noteId);
     if (!note) throw new Error('not found');
     note.checklistItems = items.map((i, idx) => ({
@@ -189,5 +189,72 @@ describe('backupJson usecase', () => {
       shapeError = (e as Error).message;
     }
     expect(shapeError).toBe('バックアップ形式が不正です');
+  });
+
+  it('imports notes whose fields are missing or of the wrong type', async () => {
+    const noteRepo = new FakeNoteRepo();
+    const labelRepo = new FakeLabelRepo();
+
+    const payload = JSON.stringify({
+      version: '1.0',
+      notes: [
+        {},
+        { title: 'B', type: 'UNKNOWN', color: 'MAGENTA', labels: ['ok', 42], checklistItems: 'nope' },
+        { title: 'C', type: 'CHECKLIST', checklistItems: [{ text: 'item' }], dueAt: 'not-a-date' },
+      ],
+    });
+
+    const result = await importBackupJson(payload, { noteRepo, labelRepo }, 'merge');
+    expect(result.created).toBe(3);
+
+    const notes = await noteRepo.findAll({ archived: false });
+    expect(notes.map((n) => n.type)).toEqual(['TEXT', 'TEXT', 'CHECKLIST']);
+    expect(notes.map((n) => n.color)).toEqual(['NONE', 'NONE', 'NONE']);
+    expect(notes[1]?.labels.length).toBe(1);
+    expect(notes[2]?.dueAt).toBe(null);
+    expect(notes[2]?.checklistItems[0]?.text).toBe('item');
+  });
+});
+
+describe('normalizeBackupItem', () => {
+  it('falls back to safe defaults for a completely empty object', () => {
+    const item = normalizeBackupItem({});
+    expect(item.title).toBe('');
+    expect(item.type).toBe('TEXT');
+    expect(item.color).toBe('NONE');
+    expect(item.isPinned).toBe(false);
+    expect(item.labels).toEqual([]);
+    expect(item.checklistItems).toEqual([]);
+    expect(Number.isNaN(new Date(item.createdAt).getTime())).toBe(false);
+  });
+
+  it('keeps valid values as-is', () => {
+    const item = normalizeBackupItem({
+      title: 'T',
+      content: 'C',
+      type: 'CHECKLIST',
+      color: 'BLUE',
+      isPinned: true,
+      isArchived: true,
+      dueAt: '2026-04-19T00:00:00.000Z',
+      labels: ['x'],
+      checklistItems: [{ text: 'a', isChecked: true, position: 500 }],
+    });
+    expect(item).toMatchObject({
+      title: 'T',
+      content: 'C',
+      type: 'CHECKLIST',
+      color: 'BLUE',
+      isPinned: true,
+      isArchived: true,
+      dueAt: '2026-04-19T00:00:00.000Z',
+      labels: ['x'],
+      checklistItems: [{ text: 'a', isChecked: true, position: 500 }],
+    });
+  });
+
+  it('assigns positions to checklist items that lack them', () => {
+    const item = normalizeBackupItem({ checklistItems: [{ text: 'a' }, { text: 'b' }] });
+    expect(item.checklistItems.map((i) => i.position)).toEqual([0, 1000]);
   });
 });

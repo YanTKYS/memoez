@@ -1,4 +1,5 @@
-import { eq, desc, isNull, and, or, like, sql, inArray } from 'drizzle-orm';
+import { eq, desc, isNull, isNotNull, and, or, sql, inArray, type SQL } from 'drizzle-orm';
+import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import * as schema from '../db/schema';
 import { notes, checklistItems, noteLabels, labels } from '../db/schema';
@@ -6,8 +7,26 @@ import type { INoteRepository, CreateNoteInput, UpdateNoteInput } from '@/domain
 import type { Note, NoteColor } from '@/domain/entities/Note';
 import { toNote } from '../mappers/noteMapper';
 import { generateUUID } from '@/lib/uuid';
+import { containsPattern } from '@/lib/likePattern';
+import { nextSortWeight } from '@/lib/sortWeight';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
+
+/** `%` `_` をワイルドカードとして解釈させない部分一致検索 */
+function likeContains(column: SQLiteColumn, query: string): SQL {
+  return sql`${column} LIKE ${containsPattern(query)} ESCAPE '\\'`;
+}
+
+function groupBy<T, K>(rows: T[], keyOf: (row: T) => K): Map<K, T[]> {
+  const map = new Map<K, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const bucket = map.get(key);
+    if (bucket) bucket.push(row);
+    else map.set(key, [row]);
+  }
+  return map;
+}
 
 export class DrizzleNoteRepository implements INoteRepository {
   constructor(private readonly db: DB) {}
@@ -58,13 +77,17 @@ export class DrizzleNoteRepository implements INoteRepository {
         ),
       );
 
-    return noteRows.map((row) => {
-      const rowItems  = allItems.filter((i) => i.noteId === row.id);
-      const rowLabels = allNoteLabels
-        .filter((nl) => nl.noteId === row.id)
-        .map((nl) => nl.label);
-      return toNote(row, rowLabels, rowItems);
-    });
+    // note 単位でグルーピングしてから変換する（noteRows × 関連行の総当たりを避ける）
+    const itemsByNote  = groupBy(allItems, (i) => i.noteId);
+    const labelsByNote = groupBy(allNoteLabels, (nl) => nl.noteId);
+
+    return noteRows.map((row) =>
+      toNote(
+        row,
+        (labelsByNote.get(row.id) ?? []).map((nl) => nl.label),
+        itemsByNote.get(row.id) ?? [],
+      ),
+    );
   }
 
   // ─── public methods ──────────────────────────────────────────────────────────
@@ -93,20 +116,35 @@ export class DrizzleNoteRepository implements INoteRepository {
   }
 
   async search(query: string): Promise<Note[]> {
-    const q = `%${query}%`;
-
-    // チェックリストアイテムにマッチするnote_idを取得
-    const matchedItemNoteIds = await this.db
-      .selectDistinct({ noteId: checklistItems.noteId })
-      .from(checklistItems)
-      .where(
-        and(
-          like(checklistItems.text, q),
-          isNull(checklistItems.deletedAt),
+    // チェックリストアイテム / ラベルにマッチする note_id を取得
+    const [matchedItemNoteIds, matchedLabelNoteIds] = await Promise.all([
+      this.db
+        .selectDistinct({ noteId: checklistItems.noteId })
+        .from(checklistItems)
+        .where(
+          and(
+            likeContains(checklistItems.text, query),
+            isNull(checklistItems.deletedAt),
+          ),
         ),
-      );
+      this.db
+        .selectDistinct({ noteId: noteLabels.noteId })
+        .from(noteLabels)
+        .innerJoin(labels, eq(noteLabels.labelId, labels.id))
+        .where(
+          and(
+            likeContains(labels.name, query),
+            isNull(labels.deletedAt),
+          ),
+        ),
+    ]);
 
-    const itemNoteIds = matchedItemNoteIds.map((r) => r.noteId);
+    const relatedNoteIds = [
+      ...new Set([
+        ...matchedItemNoteIds.map((r) => r.noteId),
+        ...matchedLabelNoteIds.map((r) => r.noteId),
+      ]),
+    ];
 
     const rows = await this.db
       .select()
@@ -116,9 +154,9 @@ export class DrizzleNoteRepository implements INoteRepository {
           isNull(notes.deletedAt),
           eq(notes.isArchived, false),
           or(
-            like(notes.title, q),
-            like(notes.content, q),
-            itemNoteIds.length > 0 ? inArray(notes.id, itemNoteIds) : sql`0`,
+            likeContains(notes.title, query),
+            likeContains(notes.content, query),
+            ...(relatedNoteIds.length > 0 ? [inArray(notes.id, relatedNoteIds)] : []),
           ),
         ),
       )
@@ -165,7 +203,7 @@ export class DrizzleNoteRepository implements INoteRepository {
         isArchived:  false,
         dueAt:       input.dueAt ?? null,
         reminderAt:  input.reminderAt ?? null,
-        sortWeight:  maxWeight + 1000,
+        sortWeight:  nextSortWeight(maxWeight),
         createdAt:   now,
         updatedAt:   now,
         serverId:    generateUUID(), // オフライン作成 → 後でサーバーに push する際の識別子
@@ -255,12 +293,18 @@ export class DrizzleNoteRepository implements INoteRepository {
 
   async updateChecklistItems(
     noteId: number,
-    items: Array<{ id?: number; text: string; isChecked: boolean; position: number }>,
+    items: { id?: number; text: string; isChecked: boolean; position: number }[],
   ): Promise<Note> {
     const now = new Date();
 
     // トランザクションで atomic に実行（削除後の挿入失敗によるデータ消失を防ぐ）
     await this.db.transaction(async (tx) => {
+      // 本メソッドは毎回「全行を論理削除 → 作り直し」を行うため、自動保存のたびに
+      // 墓石行が増え続ける。世代を 1 つだけ残すよう、前回分はここで物理削除する。
+      await tx
+        .delete(checklistItems)
+        .where(and(eq(checklistItems.noteId, noteId), isNotNull(checklistItems.deletedAt)));
+
       await tx
         .update(checklistItems)
         .set({ deletedAt: now })

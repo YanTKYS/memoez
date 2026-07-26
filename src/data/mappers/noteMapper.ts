@@ -8,6 +8,18 @@ type NoteRow          = InferSelectModel<typeof notes>;
 type ChecklistItemRow = InferSelectModel<typeof checklistItems>;
 type LabelRow         = InferSelectModel<typeof labels>;
 
+/**
+ * Drizzle の timestamp_ms カラムは Date を返すが、生 SQL 経由の行は数値のまま来る。
+ * どちらでも Date に正規化する。
+ */
+function toDate(value: Date | number | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+function toNullableDate(value: Date | number | string | null | undefined): Date | null {
+  return value == null ? null : toDate(value);
+}
+
 export function toNote(
   row:    NoteRow,
   labelRows: LabelRow[]         = [],
@@ -21,18 +33,12 @@ export function toNote(
     color:          row.color as NoteColor,
     isPinned:       Boolean(row.isPinned),
     isArchived:     Boolean(row.isArchived),
-    dueAt:          row.dueAt
-                      ? (row.dueAt instanceof Date ? row.dueAt : new Date(row.dueAt))
-                      : null,
-    reminderAt:     row.reminderAt
-                      ? (row.reminderAt instanceof Date ? row.reminderAt : new Date(row.reminderAt))
-                      : null,
+    dueAt:          toNullableDate(row.dueAt),
+    reminderAt:     toNullableDate(row.reminderAt),
     sortWeight:     row.sortWeight,
-    createdAt:      row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
-    updatedAt:      row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
-    deletedAt:      row.deletedAt
-                      ? (row.deletedAt instanceof Date ? row.deletedAt : new Date(row.deletedAt))
-                      : null,
+    createdAt:      toDate(row.createdAt),
+    updatedAt:      toDate(row.updatedAt),
+    deletedAt:      toNullableDate(row.deletedAt),
     labels:         labelRows.map(toLabel),
     checklistItems: itemRows.map(toChecklistItem),
   };
@@ -42,11 +48,9 @@ export function toLabel(row: LabelRow): Label {
   return {
     id:        row.id,
     name:      row.name,
-    createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
-    updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
-    deletedAt: row.deletedAt
-                 ? (row.deletedAt instanceof Date ? row.deletedAt : new Date(row.deletedAt))
-                 : null,
+    createdAt: toDate(row.createdAt),
+    updatedAt: toDate(row.updatedAt),
+    deletedAt: toNullableDate(row.deletedAt),
   };
 }
 
@@ -57,9 +61,7 @@ export function toChecklistItem(row: ChecklistItemRow): ChecklistItem {
     text:      row.text,
     isChecked: Boolean(row.isChecked),
     position:  row.position,
-    createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
-    deletedAt: row.deletedAt
-                 ? (row.deletedAt instanceof Date ? row.deletedAt : new Date(row.deletedAt))
-                 : null,
+    createdAt: toDate(row.createdAt),
+    deletedAt: toNullableDate(row.deletedAt),
   };
 }

@@ -13,13 +13,15 @@ export function useSearch(selectedLabelId: number | null = null) {
 
   const search = useCallback(async (q: string) => {
     const plan = buildSearchPlan(q, selectedLabelId);
+    const seq = ++seqRef.current; // このリクエストの番号を確保
+
+    // 条件クリア時も採番することで、実行中の検索結果が後から流れ込むのを防ぐ
     if (plan.mode === 'none') {
       setResults([]);
       setLoading(false);
       return;
     }
 
-    const seq = ++seqRef.current; // このリクエストの番号を確保
     setLoading(true);
 
     try {
