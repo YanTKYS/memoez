@@ -312,11 +312,11 @@ export class DrizzleNoteRepository implements INoteRepository {
 
       if (items.length > 0) {
         await tx.insert(checklistItems).values(
-          items.map((item, i) => ({
+          items.map((item) => ({
             noteId,
             text:      item.text,
             isChecked: item.isChecked,
-            position:  item.position ?? i * 1000,
+            position:  item.position,
             createdAt: now,
           })),
         );

@@ -3,6 +3,9 @@ import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
 import { buildSearchPlan, noteMatchesKeyword } from './searchQueryPlan';
 
+/** 入力が止まってから検索するまでの待ち時間 */
+const SEARCH_DEBOUNCE_MS = 300;
+
 export function useSearch(selectedLabelId: number | null = null) {
   const [query,   setQuery]   = useState('');
   const [results, setResults] = useState<Note[]>([]);
@@ -22,47 +25,36 @@ export function useSearch(selectedLabelId: number | null = null) {
       return;
     }
 
-    setLoading(true);
-
     try {
+      const repo = getNoteRepository();
       let data: Note[];
       switch (plan.mode) {
-        case 'label': {
-          data = await getNoteRepository().findByLabel(plan.selectedLabelId!);
+        case 'label':
+          data = await repo.findByLabel(plan.selectedLabelId!);
           break;
-        }
         case 'label+keyword': {
-          const byLabel = await getNoteRepository().findByLabel(plan.selectedLabelId!);
+          const byLabel = await repo.findByLabel(plan.selectedLabelId!);
           data = byLabel.filter((n) => noteMatchesKeyword(n, plan.keyword));
           break;
         }
-        case 'keyword': {
-          data = await getNoteRepository().search(plan.keyword);
-          break;
-        }
-        default: {
-          data = [];
-        }
+        default:
+          data = await repo.search(plan.keyword);
       }
       // 最新リクエスト以外の結果は捨てる
-      if (seq === seqRef.current) {
-        setResults(data);
-      }
+      if (seq === seqRef.current) setResults(data);
     } catch (e) {
-      if (seq === seqRef.current) {
-        setResults([]);
-      }
       console.error(e);
+      if (seq === seqRef.current) setResults([]);
     } finally {
-      if (seq === seqRef.current) {
-        setLoading(false);
-      }
+      if (seq === seqRef.current) setLoading(false);
     }
   }, [selectedLabelId]);
 
-  // debounce 300ms
   useEffect(() => {
-    const timer = setTimeout(() => search(query), 300);
+    // 待機中も loading にしておく。
+    // そうしないと入力直後に「見つかりませんでした」が一瞬表示されてしまう。
+    setLoading(buildSearchPlan(query, selectedLabelId).mode !== 'none');
+    const timer = setTimeout(() => search(query), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [query, selectedLabelId, search]);
 

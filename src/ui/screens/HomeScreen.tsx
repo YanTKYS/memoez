@@ -31,14 +31,11 @@ export function HomeScreen() {
   const { bottom: safeBottom } = useSafeAreaInsets();
   const layoutMode   = useSettingsStore((s) => s.layoutMode);
   const toggleLayout = useSettingsStore((s) => s.toggleLayout);
-  const { notes, loading, error, refresh } = useNotes(false);
+  const { notes, pinnedNotes, regularNotes, loading, error, refresh } = useNotes(false);
 
   useFocusEffect(
     useCallback(() => { refresh(); }, [refresh]),
   );
-
-  const pinned  = useMemo(() => notes.filter((n) => n.isPinned),  [notes]);
-  const regular = useMemo(() => notes.filter((n) => !n.isPinned), [notes]);
 
   const openNote = useCallback((note: Note) => router.push(`/note/${note.id}`), [router]);
   const newNote  = useCallback(() => router.push('/note/new'), [router]);
@@ -70,10 +67,10 @@ export function HomeScreen() {
       }
     };
 
-    pushNotes(pinned,  'ピン留め');
-    pushNotes(regular, 'メモ');
+    pushNotes(pinnedNotes,  'ピン留め');
+    pushNotes(regularNotes, 'メモ');
     return items;
-  }, [pinned, regular, isGrid, numCols]);
+  }, [pinnedNotes, regularNotes, isGrid, numCols]);
 
   // renderItem を useCallback で安定させる → FlatList の不要な全件再レンダリングを防ぐ
   const renderItem = useCallback<ListRenderItem<SectionItem>>(({ item }) => {

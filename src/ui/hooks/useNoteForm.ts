@@ -92,6 +92,16 @@ export function noteFormSnapshot(form: NoteFormState): string {
   });
 }
 
+/** DB に書き込むチェックリストアイテム。空行は保存しないので位置も詰め直す */
+export function checklistItemsToSave(
+  form: NoteFormState,
+): { text: string; isChecked: boolean; position: number }[] {
+  if (form.type !== 'CHECKLIST') return [];
+  return form.checklistItems
+    .filter((item) => item.text.trim())
+    .map((item, idx) => ({ text: item.text, isChecked: item.isChecked, position: idx * 1000 }));
+}
+
 const defaultForm = (): NoteFormState => ({
   title:          '',
   content:        '',
@@ -181,15 +191,18 @@ export function useNoteForm(): UseNoteFormReturn {
     }));
   }, []);
 
-  const isEmpty = useCallback(
-    () =>
-      isNoteEmpty({
-        title:          form.title,
-        content:        form.content,
-        checklistItems: form.checklistItems.filter((i) => i.text.trim()),
-      }),
-    [form],
-  );
+  const isEmpty = useCallback(() => {
+    // チェックリストは CHECKLIST のときだけ画面に出るため、TEXT では空判定に含めない。
+    // （含めてしまうと、チェックリストから切り替えたメモの本文を消せなくなる）
+    const checklistItems = form.type === 'CHECKLIST'
+      ? form.checklistItems.filter((i) => i.text.trim())
+      : [];
+    return isNoteEmpty({
+      title:   form.title,
+      content: form.content,
+      checklistItems,
+    });
+  }, [form]);
 
   return {
     form,

@@ -1,15 +1,13 @@
-import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useCallback, type MutableRefObject } from 'react';
 import type { Label } from '@/domain/entities/Label';
 import type { Note, NoteColor, NoteType } from '@/domain/entities/Note';
 import { getLabelRepository, getNoteRepository } from '@/lib/di';
 
-type TimerRef = MutableRefObject<ReturnType<typeof setTimeout> | null>;
-
 type Params = {
-  note: Note | null;
-  setNote: Dispatch<SetStateAction<Note | null>>;
+  /** 最新のノートを返す（保存直後の生成分も取りこぼさないため関数で受け取る） */
+  getNote: () => Note | null;
+  setNote: (note: Note | null) => void;
   mountedRef: MutableRefObject<boolean>;
-  saveTimerRef: TimerRef;
   isEmpty: () => boolean;
   saveNote: () => Promise<void>;
   formType: NoteType;
@@ -25,10 +23,9 @@ export function computeNextLabels(current: Label[], target: Label, attached: boo
 }
 
 export function useNoteLabelActions({
-  note,
+  getNote,
   setNote,
   mountedRef,
-  saveTimerRef,
   isEmpty,
   saveNote,
   formType,
@@ -39,11 +36,11 @@ export function useNoteLabelActions({
     getLabelRepository().findAll(), []);
 
   const toggleNoteLabel = useCallback(async (label: Label, attached: boolean): Promise<void> => {
+    const note = getNote();
     if (!note) return;
     const prevLabels = note.labels;
-    const newLabels = computeNextLabels(note.labels, label, attached);
 
-    if (mountedRef.current) setNote({ ...note, labels: newLabels });
+    if (mountedRef.current) setNote({ ...note, labels: computeNextLabels(prevLabels, label, attached) });
 
     const repo = getNoteRepository();
     try {
@@ -53,11 +50,11 @@ export function useNoteLabelActions({
       if (mountedRef.current) setNote({ ...note, labels: prevLabels });
       throw e;
     }
-  }, [note, mountedRef, setNote]);
+  }, [getNote, mountedRef, setNote]);
 
   const prepareForLabels = useCallback(async (): Promise<boolean> => {
-    if (!note) {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    // ラベルはメモに紐付けるものなので、まだ保存されていなければ先に実体を作る
+    if (!getNote()) {
       if (!isEmpty()) {
         await saveNote();
       } else {
@@ -73,7 +70,7 @@ export function useNoteLabelActions({
       }
     }
     return mountedRef.current;
-  }, [note, saveTimerRef, isEmpty, saveNote, formType, formColor, mountedRef, setNote, onPlaceholderCreated]);
+  }, [getNote, isEmpty, saveNote, formType, formColor, mountedRef, setNote, onPlaceholderCreated]);
 
   return { fetchLabels, toggleNoteLabel, prepareForLabels };
 }

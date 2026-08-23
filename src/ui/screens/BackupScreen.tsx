@@ -50,8 +50,9 @@ export function BackupScreen() {
       .reverse();
 
     setFiles(jsonFiles);
-    if (jsonFiles.length > 0 && !selectedFile) setSelectedFile(jsonFiles[0] ?? null);
-  }, [ensureDirectory, fileNameOf, selectedFile]);
+    // 選択済みのファイルが残っていればそのまま。無ければ最新のものを選ぶ
+    setSelectedFile((prev) => (prev && jsonFiles.includes(prev) ? prev : jsonFiles[0] ?? null));
+  }, [ensureDirectory, fileNameOf]);
 
   useEffect(() => {
     refreshFiles();

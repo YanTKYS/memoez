@@ -26,7 +26,7 @@ export const NoteCard = React.memo(function NoteCard({ note, onPress, isGrid = t
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: bgColor }, isGrid ? styles.grid : styles.list]}
+      style={[styles.card, { backgroundColor: bgColor }, isGrid && styles.grid]}
       onPress={handlePress}
       activeOpacity={0.85}
     >
@@ -157,9 +157,6 @@ const styles = StyleSheet.create({
   },
   grid: {
     flex: 1,
-  },
-  list: {
-    marginHorizontal: spacing.md,
   },
   title: {
     fontWeight: '600',

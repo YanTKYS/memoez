@@ -48,11 +48,6 @@ export function LabelManagerScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const startEdit = (label: Label) => {
-    setEditingId(label.id);
-    setEditText(label.name);
-  };
-
   const [snackMsg, setSnackMsg] = useState('');
 
   const commitEdit = async () => {
@@ -67,6 +62,13 @@ export function LabelManagerScreen() {
       setLabels(prevLabels);
       setSnackMsg('ラベルの更新に失敗しました');
     }
+  };
+
+  // 編集中に別の行を触ったとき、入力内容を捨てずに確定してから移る
+  const startEdit = async (label: Label) => {
+    if (editingId !== null && editingId !== label.id) await commitEdit();
+    setEditingId(label.id);
+    setEditText(label.name);
   };
 
   const deleteLabel = (label: Label) => {
