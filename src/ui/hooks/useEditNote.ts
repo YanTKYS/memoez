@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
 import { reminderScheduler } from '@/lib/reminderScheduler';
-import { noteFormSnapshot, noteToForm, useNoteForm } from './useNoteForm';
+import { checklistItemsToSave, noteFormSnapshot, noteToForm, useNoteForm } from './useNoteForm';
 import { useNoteLabelActions } from './useNoteLabelActions';
 
 /** 入力が止まってから保存するまでの待ち時間 */
@@ -22,16 +22,18 @@ export function useEditNote(noteId?: number) {
   const [snackMsg,    setSnackMsg]    = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
-  const mountedRef        = useRef(true);
-  const saveTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedFeedbackRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savingRef         = useRef(false);
-  // 保存中に届いた変更を取りこぼさないためのフラグ
-  const pendingSaveRef    = useRef(false);
+  const mountedRef       = useRef(true);
+  const savedFeedbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 保存中のノート。保存処理は再レンダリングを待たずに最新値を参照する必要がある
+  const noteRef          = useRef<Note | null>(null);
   // 最後に永続化した内容。差分がなければ保存をスキップする
-  const savedSnapshotRef  = useRef<string | null>(null);
+  const savedSnapshotRef = useRef<string | null>(null);
   // ラベル付与のために自動生成した空メモかどうか
-  const placeholderRef    = useRef(false);
+  const placeholderRef   = useRef(false);
+  // 画面を離れた／メモを削除した後に自動保存が走らないようにするフラグ
+  const closedRef        = useRef(false);
+  // 戻る操作の受付済みフラグ（保存待ちの間に連打されても二重に戻らないようにする）
+  const leavingRef       = useRef(false);
 
   useEffect(() => {
     // StrictMode / Fast Refresh で effect が再実行されても
@@ -46,139 +48,137 @@ export function useEditNote(noteId?: number) {
   const noteForm = useNoteForm();
   const { form, resetForm, isEmpty } = noteForm;
 
+  /** note の state と ref をまとめて更新する */
+  const applyNote = useCallback((next: Note | null) => {
+    noteRef.current = next;
+    if (mountedRef.current) setNote(next);
+  }, []);
+
+  const getNote = useCallback(() => noteRef.current, []);
+
   // ─── 既存ノート読み込み ──────────────────────────────────────────────────
   useEffect(() => {
     if (!noteId) return;
     getNoteRepository()
       .findById(noteId)
-      .then((n) => {
+      .then((loaded) => {
         if (!mountedRef.current) return;
-        if (n) {
-          setNote(n);
-          resetForm(n);
-          savedSnapshotRef.current = noteFormSnapshot(noteToForm(n));
+        if (!loaded) {
+          // 削除済みのメモを古い一覧から開いたケース。新規メモ扱いにすると
+          // 編集内容が別のメモとして作られてしまうため、エラーとして扱う。
+          closedRef.current = true;
+          setLoadError('メモが見つかりませんでした');
+        } else {
+          applyNote(loaded);
+          resetForm(loaded);
+          savedSnapshotRef.current = noteFormSnapshot(noteToForm(loaded));
         }
         setLoading(false);
       })
       .catch(() => {
         if (!mountedRef.current) return;
+        closedRef.current = true;
         setLoadError('メモを読み込めませんでした');
         setLoading(false);
       });
-  }, [noteId, resetForm]);
+  }, [noteId, resetForm, applyNote]);
 
   // ─── 保存ロジック ────────────────────────────────────────────────────────
-  // 常に最新の saveNote を指す ref（保存完了後の再実行に使う）
-  const saveNoteRef = useRef<() => Promise<void>>(async () => {});
+  const showSavedFeedback = useCallback(() => {
+    if (!mountedRef.current) return;
+    setLastSavedAt(new Date());
+    if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
+    savedFeedbackRef.current = setTimeout(() => {
+      if (mountedRef.current) setLastSavedAt(null);
+    }, SAVED_FEEDBACK_MS);
+  }, []);
 
-  const saveNote = useCallback(async (): Promise<void> => {
-    // 保存中に呼ばれた分は破棄せず、完了後に再スケジュールする
-    if (savingRef.current) { pendingSaveRef.current = true; return; }
-    if (isEmpty())         return;
+  /** 現在のフォーム内容を 1 回だけ永続化する */
+  const persist = useCallback(async (): Promise<void> => {
+    if (closedRef.current) return;
+
+    const current = noteRef.current;
+    // 空のまま新規作成はしない。既存メモは空にした状態も保存する（本文を消せるように）
+    if (!current && isEmpty()) return;
 
     const snapshot = noteFormSnapshot(form);
     if (snapshot === savedSnapshotRef.current) return; // 変更なし
 
-    savingRef.current = true;
     if (mountedRef.current) setSaving(true);
-
     try {
       const repo  = getNoteRepository();
-      const items = form.checklistItems
-        .filter((i) => i.text.trim())
-        .map((i, idx) => ({ text: i.text, isChecked: i.isChecked, position: idx * 1000 }));
+      const input = {
+        title:      form.title,
+        content:    form.content,
+        type:       form.type,
+        color:      form.color,
+        dueAt:      form.dueAt,
+        reminderAt: form.reminderAt,
+      };
 
-      if (note) {
-        const updated = await repo.update(note.id, {
-          title:      form.title,
-          content:    form.content,
-          type:       form.type,
-          color:      form.color,
-          dueAt:      form.dueAt,
-          reminderAt: form.reminderAt,
-        });
-        if (mountedRef.current) setNote(updated);
-        reminderScheduler.syncNote(updated);
+      const saved = current
+        ? await repo.update(current.id, input)
+        : await repo.create(input);
+      applyNote(saved);
+      reminderScheduler.syncNote(saved);
 
-        if (form.type === 'CHECKLIST') {
-          // updateChecklistItems が Note を返すので直接 state に反映（DB往復1回節約）
-          const refreshed = await repo.updateChecklistItems(note.id, items);
-          if (mountedRef.current) setNote(refreshed);
-        }
-      } else {
-        const created = await repo.create({
-          title:      form.title,
-          content:    form.content,
-          type:       form.type,
-          color:      form.color,
-          dueAt:      form.dueAt,
-          reminderAt: form.reminderAt,
-        });
-        if (mountedRef.current) setNote(created);
-        reminderScheduler.syncNote(created);
-
-        if (form.type === 'CHECKLIST') {
-          const refreshed = await repo.updateChecklistItems(created.id, items);
-          if (mountedRef.current) setNote(refreshed);
-        }
+      // TEXT に切り替えたメモは、DB に残っているチェックリスト行も消す
+      const items = checklistItemsToSave(form);
+      if (items.length > 0 || saved.checklistItems.length > 0) {
+        applyNote(await repo.updateChecklistItems(saved.id, items));
       }
 
       savedSnapshotRef.current = snapshot;
-      placeholderRef.current = false;
-
-      // 保存成功フィードバック
-      if (mountedRef.current) {
-        const now = new Date();
-        setLastSavedAt(now);
-        if (savedFeedbackRef.current) clearTimeout(savedFeedbackRef.current);
-        savedFeedbackRef.current = setTimeout(() => {
-          if (mountedRef.current) setLastSavedAt(null);
-        }, SAVED_FEEDBACK_MS);
-      }
+      placeholderRef.current   = false;
+      showSavedFeedback();
     } catch (e) {
       console.error('saveNote error:', e);
       if (mountedRef.current) setSnackMsg('保存に失敗しました');
     } finally {
-      savingRef.current = false;
       if (mountedRef.current) setSaving(false);
-      // 保存中に届いた変更を、最新の form を持つ saveNote で保存し直す
-      if (pendingSaveRef.current && mountedRef.current) {
-        pendingSaveRef.current = false;
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(() => {
-          if (mountedRef.current) saveNoteRef.current();
-        }, AUTOSAVE_DELAY_MS);
-      }
     }
-  }, [form, note, isEmpty]);
+  }, [form, isEmpty, applyNote, showSavedFeedback]);
 
-  saveNoteRef.current = saveNote;
+  /**
+   * 保存を 1 本のチェーンに直列化する。
+   * 「保存中に来た変更の取りこぼし」も「同じメモの二重作成」もこれで防げる。
+   * 戻り値を await すれば、その時点のフォーム内容が確実に書き込まれている。
+   */
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+
+  const saveNote = useCallback((): Promise<void> => {
+    const next = saveChainRef.current.then(persist);
+    saveChainRef.current = next.catch(() => {});
+    return next;
+  }, [persist]);
 
   // ─── 自動保存 (debounce) ─────────────────────────────────────────────────
   useEffect(() => {
     if (loading) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      if (mountedRef.current) saveNote();
-    }, AUTOSAVE_DELAY_MS);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+    const timer = setTimeout(() => { saveNote(); }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [loading, saveNote]);
 
   // ─── 保存して戻る（stableBack 経由で BackHandler に渡す） ────────────────
   const handleBack = useCallback(async () => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    if (!isEmpty()) {
-      await saveNote();
-    } else if (note && placeholderRef.current && note.labels.length === 0) {
+    if (leavingRef.current) return; // 保存を待っている間の連打を無視する
+    leavingRef.current = true;
+
+    const current = noteRef.current;
+    if (isEmpty() && current && placeholderRef.current && current.labels.length === 0) {
       // ラベル選択のために自動生成した空メモを、一覧に残さず後始末する
+      closedRef.current = true;
       try {
-        await getNoteRepository().delete(note.id);
+        await getNoteRepository().delete(current.id);
       } catch (e) {
         console.error('discard placeholder note error:', e);
       }
+    } else {
+      await saveNote();
+      closedRef.current = true;
     }
     router.back();
-  }, [isEmpty, saveNote, note, router]);
+  }, [isEmpty, saveNote, router]);
 
   const handleBackRef = useRef(handleBack);
   handleBackRef.current = handleBack;
@@ -189,40 +189,47 @@ export function useEditNote(noteId?: number) {
 
   // ─── 削除 ────────────────────────────────────────────────────────────────
   const handleDelete = useCallback(() => {
+    const target = noteRef.current;
+    if (!target) return;
     Alert.alert('メモを削除', 'このメモを削除しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       {
         text: '削除',
         style: 'destructive',
         onPress: async () => {
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          closedRef.current = true; // 削除後に自動保存で復活させない
           try {
-            if (note) await getNoteRepository().delete(note.id);
-            if (note) reminderScheduler.cancel(note.id);
+            await getNoteRepository().delete(target.id);
+            reminderScheduler.cancel(target.id);
             router.back();
           } catch (e) {
             console.error('delete note error:', e);
+            closedRef.current = false;
             if (mountedRef.current) setSnackMsg('削除に失敗しました');
           }
         },
       },
     ]);
-  }, [note, router]);
+  }, [router]);
 
   // ─── ピン留めトグル ──────────────────────────────────────────────────────
   const handlePin = useCallback(async () => {
-    if (!note) return;
-    const updated = await getNoteRepository().togglePin(note.id);
-    if (mountedRef.current) setNote(updated);
-  }, [note]);
+    const target = noteRef.current;
+    if (!target) return;
+    try {
+      applyNote(await getNoteRepository().togglePin(target.id));
+    } catch (e) {
+      console.error('togglePin error:', e);
+      if (mountedRef.current) setSnackMsg('ピン留めを変更できませんでした');
+    }
+  }, [applyNote]);
 
   const markPlaceholder = useCallback(() => { placeholderRef.current = true; }, []);
 
   const { fetchLabels, toggleNoteLabel, prepareForLabels } = useNoteLabelActions({
-    note,
-    setNote,
+    getNote,
+    setNote: applyNote,
     mountedRef,
-    saveTimerRef,
     isEmpty,
     saveNote,
     formType: form.type,
