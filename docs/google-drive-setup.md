@@ -1,13 +1,27 @@
-# Google Drive バックアップのセットアップ
+# Google Drive バックアップのセットアップ（開発者向け）
 
-バックアップ画面の「Google Drive」欄を使うための設定です。**任意機能**で、未設定のビルドでも他の機能はそのまま動作し、Google Drive 欄に「設定されていません」と表示されるだけです。
+> **この文書は MemoEZ の開発者・リリース担当者向けです。**  
+> アプリ利用者が Google Cloud Console を操作したり、OAuth クライアントを作成したりする必要はありません。配布する APK 側で開発者が設定を済ませておけば、利用者は MemoEZ 内で Google アカウントに接続し、必要な権限を許可するだけで Google Drive バックアップを利用できます。
+
+バックアップ画面の「Google Drive」欄を有効にするためのビルド設定です。**任意機能**で、未設定のビルドでも他の機能はそのまま動作します。
 
 - 認証: [`@react-native-google-signin/google-signin`](https://github.com/react-native-google-signin/google-signin)（Android・Google Play 開発者サービス経由）
 - 権限（スコープ）: `https://www.googleapis.com/auth/drive.appdata` のみ
-- 保存先: Drive の `appDataFolder` 内の `memoez-backup.json`（マイドライブには表示されない・1 ファイルを上書き）
+- 保存先: 各利用者の Google Drive にある `appDataFolder` 内の `memoez-backup.json`（マイドライブには表示されない・1 ファイルを上書き）
 - **Expo Go では動作しません**。development build（`npx expo run:android`）または APK で確認してください。
 
-## 1. Google Cloud Console の設定
+## 利用者側の操作
+
+開発者が Google Drive 連携を設定した APK を配布した場合、利用者側で必要な操作は次のとおりです。
+
+1. MemoEZ のバックアップ画面で「Googleアカウントに接続」を押す
+2. 利用する Google アカウントを選択する
+3. MemoEZ のアプリ専用データ領域へのアクセスを許可する
+4. 「Driveへバックアップ」または「Driveから復元」を実行する
+
+Google Cloud Console、Client ID、SHA-1、GitHub Actions の設定は利用者ごとに行うものではありません。MemoEZ アプリに対して開発者が一度設定します。バックアップデータ自体は Google アカウントごとに分離され、それぞれの `appDataFolder` に保存されます。
+
+## 1. 開発者が行う Google Cloud Console の設定
 
 [Google Cloud Console](https://console.cloud.google.com/) で次を行います。
 
@@ -93,7 +107,7 @@ npx expo run:android        # development build（Expo Go は不可）
 | 接続時にエラーになる（ログに `DEVELOPER_ERROR` / code 10） | Android クライアントのパッケージ名・SHA-1 が、実際にインストールしたビルドの署名鍵と一致していない |
 | 同意画面で「アクセスをブロック」と出る | 公開ステータスが「テスト」で、そのアカウントがテストユーザーに未登録 |
 | 数日後に再接続を求められる | 公開ステータスが「テスト」（認証が 7 日で失効する） |
-| 画面に「設定されていません」と出る | ビルド時に `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` が空だった |
+| 画面に「このアプリでは Google Drive バックアップを利用できません」と出る | ビルド時に `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` が空だった |
 
 デバッグ情報（HTTP ステータス等）は画面には出さず、`[GoogleDrive]` プレフィックスで logcat に出力します。
 
