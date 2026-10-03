@@ -37,8 +37,8 @@ MemoEZ `v0.3.0` は、既存の JSON バックアップ機能を拡張し、Goog
 - DB スキーマ変更なし。既存データはそのまま利用可能。
 - 既存の JSON ファイルバックアップ／復元も引き続き利用可能。
 
-#### Google Drive 連携の設定
-Google Drive バックアップを利用する場合は、Google Cloud Console で Drive API と OAuth を設定し、`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` をビルド時に指定します。詳細は `docs/google-drive-setup.md` を参照してください。
+#### Google Drive 連携について
+Google Cloud Console、OAuth Client ID、SHA-1 などの設定は MemoEZ の開発者・リリース担当者が事前に行います。アプリ利用者がこれらを設定する必要はなく、Google Drive 連携が有効な APK では、アプリ内で Google アカウントに接続するだけで利用できます。開発者向けの設定手順は `docs/google-drive-setup.md` を参照してください。
 
 ---
 
