@@ -68,7 +68,6 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: >-
-            tools
             platform-tools
             platforms;android-35
             build-tools;35.0.0
@@ -116,6 +115,9 @@ jobs:
       # ── リリース APK ビルド ──────────────────────────────────────────────
       - name: Build release APK (unsigned)
         shell: bash
+        env:
+          # 任意。未設定なら Google Drive 連携は無効のビルドになる（docs/google-drive-setup.md）
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
         run: |
           cd android
           ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-release.log 2>&1 || {

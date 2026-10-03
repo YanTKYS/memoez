@@ -1,22 +1,27 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
-import { Appbar, Button, Text, Snackbar, SegmentedButtons, useTheme, List } from 'react-native-paper';
+import { Appbar, Button, Text, Snackbar, SegmentedButtons, useTheme, List, Divider } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { spacing } from '@/ui/theme/spacing';
 import { getLabelRepository, getNoteRepository } from '@/lib/di';
 import { exportBackupJson, importBackupJson, type ImportPolicy } from '@/domain/usecases/backupJson';
 import * as FileSystem from 'expo-file-system';
+import { GoogleDriveSection } from '@/ui/components/Backup/GoogleDriveSection';
+import { useGoogleDriveBackup } from '@/ui/hooks/useGoogleDriveBackup';
 
 export function BackupScreen() {
   const router = useRouter();
   const theme = useTheme();
   const [policy, setPolicy] = useState<ImportPolicy>('merge');
-  const [busy, setBusy] = useState(false);
+  const [fileBusy, setBusy] = useState(false);
   const [snack, setSnack] = useState('');
   const [directoryUri, setDirectoryUri] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const drive = useGoogleDriveBackup(policy);
+  // ファイル操作と Drive 操作が同時に走らないよう、どちらかが実行中なら両方を止める
+  const busy = fileBusy || drive.busy !== null;
 
   const fileNameOf = useCallback((uri: string): string => decodeURIComponent(uri.split('/').pop() ?? uri), []);
 
@@ -145,69 +150,82 @@ export function BackupScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <Appbar.Header elevated>
         <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="バックアップ I/O" />
+        <Appbar.Content title="バックアップ" />
       </Appbar.Header>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text variant="titleMedium">バックアップファイル Export / Import</Text>
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-          初期値は Download フォルダです。保存先/読込先を変更できます。
-        </Text>
-
-        <Button mode="outlined" onPress={handleChooseDirectory} disabled={busy}>
-          保存先/読込先を選択
-        </Button>
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-          現在の場所: {directoryUri ?? '(未選択)'}
-        </Text>
-
-        <View style={styles.row}>
-          <Button mode="contained-tonal" onPress={handleExport} loading={busy} disabled={busy}>
-            エクスポート
-          </Button>
-          <Button mode="contained" onPress={handleImport} loading={busy} disabled={busy}>
-            インポート
-          </Button>
+        <View style={styles.section}>
+          <Text variant="titleMedium">復元方法</Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            JSONファイル・Google Drive どちらから復元する場合も共通です。
+            merge は同じ内容のメモを除いて追加、overwrite は現在のメモを削除してバックアップに置き換えます。
+          </Text>
+          <SegmentedButtons
+            value={policy}
+            onValueChange={(v) => setPolicy(v as ImportPolicy)}
+            buttons={[
+              { value: 'merge', label: 'merge' },
+              { value: 'overwrite', label: 'overwrite' },
+            ]}
+          />
         </View>
 
-        <SegmentedButtons
-          value={policy}
-          onValueChange={(v) => setPolicy(v as ImportPolicy)}
-          buttons={[
-            { value: 'merge', label: 'merge' },
-            { value: 'overwrite', label: 'overwrite' },
-          ]}
-        />
+        <Divider />
 
-        <Button mode="outlined" onPress={refreshFiles} disabled={busy}>
-          ファイル一覧を更新
-        </Button>
+        <View style={styles.section}>
+          <Text variant="titleMedium">端末</Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            初期値は Download フォルダです。保存先/読込先を変更できます。
+          </Text>
 
-        <View style={[styles.fileBox, { borderColor: theme.colors.outlineVariant }]}>
-          {files.length === 0 ? (
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              backup ファイルがありません。先にエクスポートしてください。
-            </Text>
-          ) : (
-            files.map((uri) => {
-              const selected = selectedFile === uri;
-              return (
-                <List.Item
-                  key={uri}
-                  title={fileNameOf(uri)}
-                  description={selected ? '選択中' : undefined}
-                  onPress={() => setSelectedFile(uri)}
-                  left={(props) => (
-                    <List.Icon
-                      {...props}
-                      icon={selected ? 'check-circle' : 'file-document-outline'}
-                    />
-                  )}
-                />
-              );
-            })
-          )}
+          <Button mode="outlined" onPress={handleChooseDirectory} disabled={busy}>
+            保存先/読込先を選択
+          </Button>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            現在の場所: {directoryUri ?? '(未選択)'}
+          </Text>
+
+          <Button mode="contained-tonal" onPress={handleExport} loading={fileBusy} disabled={busy}>
+            JSONファイルへバックアップ
+          </Button>
+          <Button mode="contained" onPress={handleImport} loading={fileBusy} disabled={busy}>
+            JSONファイルから復元
+          </Button>
+
+          <Button mode="outlined" onPress={refreshFiles} disabled={busy}>
+            ファイル一覧を更新
+          </Button>
+
+          <View style={[styles.fileBox, { borderColor: theme.colors.outlineVariant }]}>
+            {files.length === 0 ? (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                backup ファイルがありません。先にバックアップしてください。
+              </Text>
+            ) : (
+              files.map((uri) => {
+                const selected = selectedFile === uri;
+                return (
+                  <List.Item
+                    key={uri}
+                    title={fileNameOf(uri)}
+                    description={selected ? '選択中' : undefined}
+                    onPress={() => setSelectedFile(uri)}
+                    left={(props) => (
+                      <List.Icon
+                        {...props}
+                        icon={selected ? 'check-circle' : 'file-document-outline'}
+                      />
+                    )}
+                  />
+                );
+              })
+            )}
+          </View>
         </View>
+
+        <Divider />
+
+        <GoogleDriveSection drive={drive} disabled={fileBusy} />
       </ScrollView>
 
       <Snackbar visible={!!snack} onDismiss={() => setSnack('')} duration={2200}>
@@ -219,13 +237,10 @@ export function BackupScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: spacing.md, gap: spacing.sm },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
+  content: { padding: spacing.md, gap: spacing.md },
+  section: { gap: spacing.sm },
   fileBox: {
-    minHeight: 220,
+    minHeight: 160,
     borderWidth: 1,
     borderRadius: 10,
     overflow: 'hidden',

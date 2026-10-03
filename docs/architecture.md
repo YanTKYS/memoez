@@ -133,6 +133,29 @@ mapper (DB行 → Note エンティティ)
 hooks が状態を更新 → Screen が再描画
 ```
 
+## バックアップ（ファイル / Google Drive）
+
+バックアップ形式は JSON 1 種類のみで、保存先だけが異なります。Drive 専用の形式やテーブル直読みはありません。
+
+```
+SQLite
+  │  INoteRepository
+  ▼
+exportBackupJson (domain/usecases/backupJson.ts)  ──►  JSON
+                                                         ├─ ローカルファイル（BackupScreen）
+                                                         └─ IRemoteBackupStore.upload
+                                                              └─ GoogleDriveBackupStore (data/backup)
+                                                                   └─ DriveClient (lib/googleDrive) ── Drive API / appDataFolder
+復元: IRemoteBackupStore.download ─► importBackupJson（形式検証 → 書き込み。ファイル復元と同一処理）
+```
+
+- **domain/backup/**: `IRemoteBackupStore`（保存先の抽象）と `BackupError`（失敗の分類と利用者向け文言）。
+- **domain/usecases/driveBackup.ts**: `backupToRemote` / `restoreFromRemote`。既存の export / import をつなぐだけ。
+- **data/backup/GoogleDriveBackupStore.ts**: `memoez-backup.json` 1 ファイルの作成・上書き・取得。
+- **lib/googleDrive/**: `googleAuth.ts`（Google Sign-In。ネイティブモジュールは初回利用時に遅延読み込みし、未設定ビルドでも他機能に影響しない）、`driveClient.ts`（fetch ベースの Drive v3 最小クライアント）、`config.ts`（Client ID・スコープ・ファイル名）。
+- **ui/hooks/useGoogleDriveBackup.ts**: 接続状態・最終バックアップ日時・結果表示の状態管理。
+- 要求スコープは `drive.appdata` のみ。セットアップは [google-drive-setup.md](google-drive-setup.md)。
+
 ## 楽観的更新パターン
 
 ラベルのトグルなど即時反応が求められる操作では、**UI 先行更新 → 非同期 DB 書き込み → エラー時にスナップショット復元** というパターンを採用しています。
