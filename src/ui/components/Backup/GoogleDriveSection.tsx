@@ -22,7 +22,7 @@ export function GoogleDriveSection({ drive, disabled = false }: Props) {
 
       {!drive.configured ? (
         <Text variant="bodySmall" style={muted}>
-          Google Drive 連携は設定されていません（docs/google-drive-setup.md を参照）。
+          このアプリでは Google Drive バックアップを利用できません。
         </Text>
       ) : drive.email === null ? (
         <>
