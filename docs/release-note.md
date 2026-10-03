@@ -5,6 +5,43 @@
 
 ---
 
+## v0.3.0
+
+リリース作業日: 2026-10-03
+
+### Title
+`v0.3.0: Google Drive バックアップ／復元に対応`
+
+### Note
+MemoEZ `v0.3.0` は、既存の JSON バックアップ機能を拡張し、Google Drive への手動バックアップ／復元に対応したリリースです。端末内 SQLite を引き続き正とし、Google Drive はバックアップ保存先として利用します。
+
+#### ハイライト
+- Google Drive 連携
+  - Google アカウントに接続し、Drive の `appDataFolder` へバックアップを保存
+  - `memoez-backup.json` を 1 ファイルで管理し、2 回目以降は上書き
+  - Drive 上のバックアップから `merge` / `overwrite` を選んで復元
+  - 最終バックアップ日時、接続状態、成功／失敗をバックアップ画面に表示
+  - 要求スコープを `https://www.googleapis.com/auth/drive.appdata` のみに限定
+- バックアップ基盤
+  - 既存の `exportBackupJson` / `importBackupJson` を Google Drive でも共通利用
+  - 不正 JSON や形式不正は DB 書き込み前に検証
+  - Google Drive の保存先を `IRemoteBackupStore` で抽象化し、UI・ドメイン・Drive API の責務を分離
+- 安定性
+  - 認証期限切れ時のアクセストークン再取得、ネットワーク・API・バックアップ未存在などのエラー処理を追加
+  - Google Drive 連携が未設定でも、既存のメモ機能と JSON ファイルバックアップは従来どおり利用可能
+- CI / ビルド
+  - Android SDK セットアップから廃止済みの `tools` 指定を削除
+  - debug APK ビルド後に Google Sign-In のネイティブモジュールが実際に組み込まれていることを CI で検証
+
+#### 互換性
+- DB スキーマ変更なし。既存データはそのまま利用可能。
+- 既存の JSON ファイルバックアップ／復元も引き続き利用可能。
+
+#### Google Drive 連携の設定
+Google Drive バックアップを利用する場合は、Google Cloud Console で Drive API と OAuth を設定し、`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` をビルド時に指定します。詳細は `docs/google-drive-setup.md` を参照してください。
+
+---
+
 ## v0.2.0（ドラフト）
 
 ### Title
