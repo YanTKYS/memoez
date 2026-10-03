@@ -9,6 +9,8 @@ MemoEZ は GitHub Actions を使って APK のビルドとリリースを自動�
 | `.github/workflows/android-build.yml` | PR・main へのプッシュ | デバッグ APK（Artifacts に 14 日間保存） |
 | `.github/workflows/release-signed-apk.yml` | `v*` タグのプッシュ・手動実行 | 署名済みまたは未署名リリース APK（GitHub Release に添付） |
 
+Google Drive 連携を有効にする場合は、リポジトリ変数 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` を登録します（APK ビルドステップが環境変数として参照。未登録なら連携無効のビルド）。詳細は [google-drive-setup.md](google-drive-setup.md) を参照してください。
+
 ---
 
 ## android-build.yml

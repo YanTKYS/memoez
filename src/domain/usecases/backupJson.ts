@@ -5,6 +5,14 @@ import type { INoteRepository } from '@/domain/repositories/INoteRepository';
 
 export type ImportPolicy = 'merge' | 'overwrite';
 
+/** バックアップ JSON の形式不正（解析不能・version/notes 不正）。DB には一切触れる前に投げる */
+export class BackupFormatError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BackupFormatError';
+  }
+}
+
 export interface BackupNoteItem {
   title: string;
   content: string;
@@ -115,12 +123,12 @@ function parsePayload(raw: string): BackupPayload {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error('JSONの解析に失敗しました');
+    throw new BackupFormatError('JSONの解析に失敗しました');
   }
 
   const data = (parsed ?? {}) as Partial<BackupPayload>;
   if (data.version !== '1.0' || !Array.isArray(data.notes)) {
-    throw new Error('バックアップ形式が不正です');
+    throw new BackupFormatError('バックアップ形式が不正です');
   }
   return {
     version: '1.0',

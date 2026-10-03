@@ -117,6 +117,9 @@ jobs:
       # Kotlin コンパイラエラー (^e: ) と Gradle エラー行のみ抽出する。
       - name: Build debug APK
         shell: bash
+        env:
+          # 任意。未設定なら Google Drive 連携は無効のビルドになる（docs/google-drive-setup.md）
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
         run: |
           cd android
           ./gradlew assembleDebug -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
@@ -241,6 +244,9 @@ jobs:
 
       - name: Build release APK (unsigned)
         shell: bash
+        env:
+          # 任意。未設定なら Google Drive 連携は無効のビルドになる（docs/google-drive-setup.md）
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
         run: |
           cd android
           ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-release.log 2>&1 || {

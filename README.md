@@ -1,6 +1,6 @@
 # MemoEZ
 
-シンプルで使いやすい Android 向けメモアプリです。オフライン専用で、すべてのデータはデバイス内の SQLite に保存されます。
+シンプルで使いやすい Android 向けメモアプリです。データはデバイス内の SQLite に保存され、オフラインで利用できます（Google Drive バックアップは任意機能です）。
 
 <!-- スクリーンショット
   実際の画像が用意できたら以下のコメントを解除してください。
@@ -22,6 +22,7 @@
 - タイトル・本文・チェックリスト・ラベル名を対象とした部分一致検索
 - 期限 / リマインドの設定
 - JSON ファイルへのバックアップとインポート
+- Google Drive へのバックアップと復元（任意・手動。`appDataFolder` に保存。設定手順: [docs/google-drive-setup.md](docs/google-drive-setup.md)）
 - ダーク / ライトテーマ（端末設定に追従）・一覧レイアウト切り替え（Zustand で永続化）
 - 将来のサーバー同期に向けた `serverId` / `syncedAt` カラム対応済み
 
@@ -69,6 +70,8 @@ npx expo run:android
 ```
 
 `expo run:android` は初回実行時に `expo prebuild` を自動で行い、`android/` ディレクトリを生成します。
+
+Google Drive バックアップを試す場合のみ、`.env.example` を `.env` にコピーして Client ID を設定してください（[docs/google-drive-setup.md](docs/google-drive-setup.md)）。Expo Go では動作しません。
 
 ### TypeScript チェック
 
@@ -145,7 +148,7 @@ memoez/
 │   ├── note/new.tsx            # 新規メモ作成画面
 │   ├── search.tsx              # 検索画面
 │   ├── labels.tsx              # ラベル管理画面
-│   └── backup.tsx              # バックアップ I/O 画面
+│   └── backup.tsx              # バックアップ画面（端末 / Google Drive）
 ├── src/
 │   ├── domain/                 # 純粋な型・インターフェース（FW依存なし）
 │   ├── data/                   # Drizzle 実装・DB・マイグレーション
@@ -163,5 +166,6 @@ memoez/
 |---------|------|
 | [docs/architecture.md](docs/architecture.md) | アーキテクチャ概要・レイヤー設計・DI・データフロー |
 | [docs/database.md](docs/database.md) | DB設計・テーブル定義・マイグレーション方針 |
+| [docs/google-drive-setup.md](docs/google-drive-setup.md) | Google Drive バックアップの設定（Cloud Console・Client ID・SHA-1・CI） |
 | [docs/ci-cd.md](docs/ci-cd.md) | CI/CD ワークフロー・署名設定手順 |
 | [docs/release-note.md](docs/release-note.md) | 全バージョンのリリースノート（新しい順） |
