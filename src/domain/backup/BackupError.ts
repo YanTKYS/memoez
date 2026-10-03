@@ -26,7 +26,7 @@ export class BackupError extends Error {
 }
 
 const USER_MESSAGES: Record<BackupErrorCode, string> = {
-  NOT_CONFIGURED: 'この版では Google Drive 連携が設定されていません',
+  NOT_CONFIGURED: 'このアプリでは Google Drive バックアップを利用できません',
   NOT_CONNECTED: 'Google アカウントに接続してください',
   AUTH_CANCELLED: 'Google アカウントへの接続がキャンセルされました',
   AUTH_EXPIRED: 'Google アカウントの認証が切れました。もう一度接続してください',
