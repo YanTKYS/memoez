@@ -47,7 +47,6 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: >-
-            tools
             platform-tools
             platforms;android-35
             build-tools;35.0.0
@@ -143,6 +142,15 @@ jobs:
             exit 1
           }
 
+      # Google Sign-In のネイティブモジュールが自動リンクで APK に入っていることを確認する
+      # （config plugin は使わないため、リンクが外れても TypeScript / ビルドは通ってしまう）
+      - name: Verify Google Sign-In native module is linked
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -p "$APK" 'classes*.dex' | grep -aq 'Lcom/reactnativegooglesignin/RNGoogleSigninModule;' \
+            && echo "RNGoogleSigninModule is linked" \
+            || { echo "::error::RNGoogleSigninModule not found in APK (autolinking failed)"; exit 1; }
+
       - name: Run Lint
         if: github.event_name == 'pull_request'
         run: cd android && ./gradlew lintDebug -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon
@@ -196,7 +204,6 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: >-
-            tools
             platform-tools
             platforms;android-35
             build-tools;35.0.0

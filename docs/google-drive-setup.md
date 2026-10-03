@@ -45,6 +45,15 @@ keytool -list -v -keystore release.jks -alias memoez
 
 出力の `SHA1:` の行を Android クライアントに登録します。Gradle の `./gradlew signingReport`（`android/` で実行）でも確認できます。
 
+### ネイティブモジュールの組み込み（config plugin を使わない理由）
+
+`@react-native-google-signin/google-signin` の Expo config plugin には、Firebase の `google-services.json` を使う構成と、Firebase を使わず `iosUrlScheme` を渡す構成があります。後者が変更するのは iOS の `Info.plist` だけで、Android には何も追加しません。MemoEZ は Android 専用・Firebase 不使用のため、**plugin を `app.json` に登録せず、自動リンクだけで組み込んでいます**。
+
+- `expo prebuild` が生成する `settings.gradle` が `expo-modules-autolinking` の `react-native-config` を呼び、`RNGoogleSigninPackage` を自動リンクします。
+- Android 側の認証設定は「Android OAuth クライアント（パッケージ名 + SHA-1）」と、実行時に `configure()` へ渡すウェブ クライアント ID だけです。`AndroidManifest.xml` や Gradle の手動編集は不要です。
+- `android-build.yml` はデバッグ APK のビルド後に、APK の dex に `RNGoogleSigninModule` が含まれることを確認します。
+- iOS 対応を追加する場合は、`app.json` の `plugins` に `iosUrlScheme` 付きで登録が必要になります。
+
 ## 2. ローカル開発
 
 ```bash
