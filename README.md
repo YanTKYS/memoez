@@ -22,9 +22,11 @@
 - タイトル・本文・チェックリスト・ラベル名を対象とした部分一致検索
 - 期限 / リマインドの設定
 - JSON ファイルへのバックアップとインポート
-- Google Drive へのバックアップと復元（任意・手動。`appDataFolder` に保存。設定手順: [docs/google-drive-setup.md](docs/google-drive-setup.md)）
+- Google Drive へのバックアップと復元（任意・手動。利用者はアプリ内で Google アカウントに接続するだけで利用可能）
 - ダーク / ライトテーマ（端末設定に追従）・一覧レイアウト切り替え（Zustand で永続化）
 - 将来のサーバー同期に向けた `serverId` / `syncedAt` カラム対応済み
+
+> Google Cloud Console、OAuth Client ID、SHA-1 などの設定はアプリ開発者・リリース担当者が行います。利用者ごとの設定は不要です。
 
 ## 技術スタック
 
@@ -71,7 +73,7 @@ npx expo run:android
 
 `expo run:android` は初回実行時に `expo prebuild` を自動で行い、`android/` ディレクトリを生成します。
 
-Google Drive バックアップを試す場合のみ、`.env.example` を `.env` にコピーして Client ID を設定してください（[docs/google-drive-setup.md](docs/google-drive-setup.md)）。Expo Go では動作しません。
+開発時に Google Drive バックアップを試す場合のみ、開発者が `.env.example` を `.env` にコピーして Client ID を設定してください（[docs/google-drive-setup.md](docs/google-drive-setup.md)）。Expo Go では動作しません。
 
 ### TypeScript チェック
 
@@ -166,6 +168,6 @@ memoez/
 |---------|------|
 | [docs/architecture.md](docs/architecture.md) | アーキテクチャ概要・レイヤー設計・DI・データフロー |
 | [docs/database.md](docs/database.md) | DB設計・テーブル定義・マイグレーション方針 |
-| [docs/google-drive-setup.md](docs/google-drive-setup.md) | Google Drive バックアップの設定（Cloud Console・Client ID・SHA-1・CI） |
+| [docs/google-drive-setup.md](docs/google-drive-setup.md) | 開発者向け Google Drive 連携設定（Cloud Console・Client ID・SHA-1・CI） |
 | [docs/ci-cd.md](docs/ci-cd.md) | CI/CD ワークフロー・署名設定手順 |
 | [docs/release-note.md](docs/release-note.md) | 全バージョンのリリースノート（新しい順） |
