@@ -14,7 +14,7 @@
         android:padding="@dimen/memoez_widget_padding">
 
         <TextView
-            style="@style/MemoEZ.Widget.Text"
+            style="@style/MemoEZWidgetText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="4dp"
@@ -24,7 +24,7 @@
             android:textStyle="bold" />
 
         <TextView
-            style="@style/MemoEZ.Widget.Text"
+            style="@style/MemoEZWidgetText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:lineSpacingExtra="2dp"
