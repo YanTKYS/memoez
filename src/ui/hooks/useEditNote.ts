@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Alert, AppState } from 'react-native';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
+import { subscribeNotesChanged } from '@/lib/noteChangeEvents';
 import { reminderScheduler } from '@/lib/reminderScheduler';
 import { checklistItemsToSave, noteFormSnapshot, noteToForm, useNoteForm } from './useNoteForm';
 import { useNoteLabelActions } from './useNoteLabelActions';
@@ -12,8 +12,17 @@ const AUTOSAVE_DELAY_MS = 1000;
 /** 「保存しました」表示を消すまでの時間 */
 const SAVED_FEEDBACK_MS = 3000;
 
-export function useEditNote(noteId?: number) {
-  const router = useRouter();
+export interface UseEditNoteOptions {
+  /**
+   * 編集を終えて画面を閉じる（保存完了後に呼ばれる）。
+   * 通常画面では router.back()、ウィジェットのフローティングエディタではウィンドウを閉じる。
+   */
+  onExit: () => void;
+}
+
+export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteOptions) {
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
 
   const [note,        setNote]        = useState<Note | null>(null);
   const [loading,     setLoading]     = useState(!!noteId);
@@ -47,6 +56,9 @@ export function useEditNote(noteId?: number) {
 
   const noteForm = useNoteForm();
   const { form, resetForm, isEmpty } = noteForm;
+  // 非同期処理の途中で最新の入力内容を参照するための ref
+  const formRef = useRef(form);
+  formRef.current = form;
 
   /** note の state と ref をまとめて更新する */
   const applyNote = useCallback((next: Note | null) => {
@@ -159,6 +171,61 @@ export function useEditNote(noteId?: number) {
     return () => clearTimeout(timer);
   }, [loading, saveNote]);
 
+  // ─── 待ち時間中の入力を取りこぼさない ────────────────────────────────────
+  // debounce の待ち時間中にアプリが裏に回る・画面が破棄される（ウィジェットの
+  // フローティングエディタはホームボタンで閉じる）と、最後の入力が保存されない。
+  // その時点の内容を即座に保存する。保存済み・削除済みなら persist 側で何もしない。
+  const saveNoteRef = useRef(saveNote);
+  saveNoteRef.current = saveNote;
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') saveNoteRef.current().catch(() => {});
+    });
+    return () => {
+      sub.remove();
+      saveNoteRef.current().catch(() => {});
+    };
+  }, []);
+
+  // ─── 他の画面での変更を反映 ──────────────────────────────────────────────
+  // 通常画面とウィジェットのフローティングエディタで同じメモを開いている場合に、
+  // 古い内容のまま上書き保存しないよう、未編集なら最新の内容を読み直す。
+  // 保存と同じチェーンに積むので、自分の保存の途中経過を読み込むことはない。
+  const reloadIfChangedElsewhere = useCallback(async (): Promise<void> => {
+    const current = noteRef.current;
+    if (!current || closedRef.current || leavingRef.current) return;
+
+    const latest = await getNoteRepository().findById(current.id);
+    if (closedRef.current || !mountedRef.current) return;
+
+    if (!latest) {
+      // 別の画面で削除された。以後の自動保存で復活させない
+      closedRef.current = true;
+      setLoadError('このメモは削除されました');
+      return;
+    }
+
+    // 入力中の内容があれば保持する（次の自動保存で上書き＝後勝ち）
+    if (noteFormSnapshot(formRef.current) !== savedSnapshotRef.current) return;
+
+    applyNote(latest);
+    const latestSnapshot = noteFormSnapshot(noteToForm(latest));
+    if (latestSnapshot !== savedSnapshotRef.current) {
+      resetForm(latest);
+      savedSnapshotRef.current = latestSnapshot;
+    }
+  }, [applyNote, resetForm]);
+
+  const reloadRef = useRef(reloadIfChangedElsewhere);
+  reloadRef.current = reloadIfChangedElsewhere;
+
+  useEffect(() => subscribeNotesChanged(() => {
+    saveChainRef.current = saveChainRef.current
+      .then(() => reloadRef.current())
+      .catch((e) => console.error('reload note error:', e));
+  }), []);
+
   // ─── 保存して戻る（stableBack 経由で BackHandler に渡す） ────────────────
   const handleBack = useCallback(async () => {
     if (leavingRef.current) return; // 保存を待っている間の連打を無視する
@@ -177,8 +244,8 @@ export function useEditNote(noteId?: number) {
       await saveNote();
       closedRef.current = true;
     }
-    router.back();
-  }, [isEmpty, saveNote, router]);
+    onExitRef.current();
+  }, [isEmpty, saveNote]);
 
   const handleBackRef = useRef(handleBack);
   handleBackRef.current = handleBack;
@@ -201,7 +268,7 @@ export function useEditNote(noteId?: number) {
           try {
             await getNoteRepository().delete(target.id);
             reminderScheduler.cancel(target.id);
-            router.back();
+            onExitRef.current();
           } catch (e) {
             console.error('delete note error:', e);
             closedRef.current = false;
@@ -210,7 +277,7 @@ export function useEditNote(noteId?: number) {
         },
       },
     ]);
-  }, [router]);
+  }, []);
 
   // ─── ピン留めトグル ──────────────────────────────────────────────────────
   const handlePin = useCallback(async () => {

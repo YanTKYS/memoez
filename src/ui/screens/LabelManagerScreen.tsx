@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   FlatList,
@@ -17,16 +17,21 @@ import {
   useTheme,
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Label } from '@/domain/entities/Label';
 import { getLabelRepository } from '@/lib/di';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { spacing } from '@/ui/theme/spacing';
 
-export function LabelManagerScreen() {
-  const router                     = useRouter();
+interface Props {
+  /** 前の画面へ戻る（通常画面では router.back()） */
+  onBack: () => void;
+  /** 'floating': ウィジェットのフローティングウィンドウ内に表示する（セーフエリア余白なし） */
+  presentation?: 'screen' | 'floating';
+}
+
+export function LabelManagerScreen({ onBack, presentation = 'screen' }: Props) {
+  const isFloating                 = presentation === 'floating';
   const theme                      = useTheme();
   const { bottom: safeBottom }     = useSafeAreaInsets();
   const [labels, setLabels]       = useState<Label[]>([]);
@@ -46,7 +51,8 @@ export function LabelManagerScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // この画面から別の画面へは遷移しないため、表示時（マウント時）の読み込みで足りる
+  useEffect(() => { load(); }, [load]);
 
   const [snackMsg, setSnackMsg] = useState('');
 
@@ -109,9 +115,12 @@ export function LabelManagerScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
-      <Appbar.Header elevated>
-        <Appbar.BackAction onPress={() => router.back()} />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={isFloating ? [] : ['top']}
+    >
+      <Appbar.Header elevated statusBarHeight={isFloating ? 0 : undefined}>
+        <Appbar.BackAction onPress={onBack} />
         <Appbar.Content title="ラベルを編集" />
       </Appbar.Header>
 
@@ -184,7 +193,7 @@ export function LabelManagerScreen() {
 
       <FAB
         icon="plus"
-        style={[styles.fab, { bottom: spacing.xl + safeBottom }]}
+        style={[styles.fab, { bottom: spacing.xl + (isFloating ? 0 : safeBottom) }]}
         onPress={() => {
           // 編集中の場合は先にコミット
           if (editingId !== null) commitEdit();

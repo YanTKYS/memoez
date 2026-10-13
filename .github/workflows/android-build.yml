@@ -151,6 +151,23 @@ jobs:
             && echo "RNGoogleSigninModule is linked" \
             || { echo "::error::RNGoogleSigninModule not found in APK (autolinking failed)"; exit 1; }
 
+      # ホーム画面ウィジェット（ローカル Expo モジュール modules/memoez-widget）が
+      # prebuild 後の APK にコード・マニフェストとも組み込まれていることを確認する
+      - name: Verify home screen widget is packaged
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          AAPT2="$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -n1)/aapt2"
+          unzip -p "$APK" 'classes*.dex' | grep -aq 'Lexpo/modules/memoezwidget/NoteWidgetProvider;' \
+            || { echo "::error::memoez-widget classes not found in APK (autolinking failed)"; exit 1; }
+          MANIFEST="$("$AAPT2" dump xmltree --file AndroidManifest.xml "$APK")"
+          for name in NoteWidgetProvider FloatingEditorActivity WidgetConfigActivity; do
+            echo "$MANIFEST" | grep -q "expo.modules.memoezwidget.$name" \
+              || { echo "::error::$name is not declared in the merged AndroidManifest.xml"; exit 1; }
+          done
+          echo "$MANIFEST" | grep -q 'android.appwidget.provider' \
+            || { echo "::error::appwidget provider meta-data is missing"; exit 1; }
+          echo "Home screen widget is packaged"
+
       - name: Run Lint
         if: github.event_name == 'pull_request'
         run: cd android && ./gradlew lintDebug -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon

@@ -1,5 +1,7 @@
+import { useRouter } from 'expo-router';
 import { LabelManagerScreen } from '@/ui/screens/LabelManagerScreen';
 
 export default function LabelsPage() {
-  return <LabelManagerScreen />;
+  const router = useRouter();
+  return <LabelManagerScreen onBack={() => router.back()} />;
 }

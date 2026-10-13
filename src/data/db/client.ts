@@ -8,6 +8,9 @@ import { generateUUID } from '@/lib/uuid';
 const DB_NAME = 'memoez.db';
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+// 初期化処理の共有。通常画面とフローティングエディタ（ウィジェット）は同じ JS ランタイムで
+// 動くため、どちらが先に起動しても DB を開くのは 1 回だけにする。
+let _initPromise: Promise<void> | null = null;
 
 /** DB インスタンスを返す (シングルトン) */
 export function getDb() {
@@ -17,8 +20,20 @@ export function getDb() {
   return _db;
 }
 
-/** アプリ起動時に一度だけ呼ぶ */
-export async function initDatabase(): Promise<void> {
+/**
+ * アプリ起動時に呼ぶ。2 回目以降は初回の初期化結果を共有する（失敗時のみ再試行できる）。
+ */
+export function initDatabase(): Promise<void> {
+  if (!_initPromise) {
+    _initPromise = openDatabase().catch((e: unknown) => {
+      _initPromise = null;
+      throw e;
+    });
+  }
+  return _initPromise;
+}
+
+async function openDatabase(): Promise<void> {
   const sqlite = SQLite.openDatabaseSync(DB_NAME);
 
   sqlite.execSync('PRAGMA journal_mode = WAL;');

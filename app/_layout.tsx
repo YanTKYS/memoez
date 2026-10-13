@@ -1,34 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from 'react-native';
 import { memoEZTheme, memoEZDarkTheme } from '@/ui/theme/theme';
-import { initDatabase } from '@/data/db/client';
+import { useDatabaseInit } from '@/ui/hooks/useDatabaseInit';
+import { startWidgetSync } from '@/lib/widget/widgetSync';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 
-type DbState = 'loading' | 'ready' | 'error';
-
 export default function RootLayout() {
-  const [dbState, setDbState] = useState<DbState>('loading');
-  const [errMsg,  setErrMsg]  = useState('');
+  const { dbState, errMsg, retry } = useDatabaseInit();
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? memoEZDarkTheme : memoEZTheme;
 
-  const init = () => {
-    setDbState('loading');
-    initDatabase()
-      .then(() => setDbState('ready'))
-      .catch((e: unknown) => {
-        console.error('DB init failed:', e);
-        setErrMsg(e instanceof Error ? e.message : String(e));
-        setDbState('error');
-      });
-  };
-
-  useEffect(() => { init(); }, []);
+  // ホーム画面ウィジェットの表示をメモの変更に追従させる（ウィジェット未配置なら何もしない）
+  useEffect(() => {
+    if (dbState === 'ready') startWidgetSync();
+  }, [dbState]);
 
   if (dbState === 'loading') {
     return (
@@ -45,7 +35,7 @@ export default function RootLayout() {
           データベースを開けませんでした
         </Text>
         <Text variant="bodySmall" style={[styles.errDetail, { color: theme.colors.onSurfaceVariant }]}>{errMsg}</Text>
-        <Button mode="contained" onPress={init} style={styles.retryBtn}>
+        <Button mode="contained" onPress={retry} style={styles.retryBtn}>
           再試行
         </Button>
       </View>
