@@ -21,6 +21,7 @@
 - カラーによるメモの色分け
 - タイトル・本文・チェックリスト・ラベル名を対象とした部分一致検索
 - 期限 / リマインドの設定
+- ホーム画面の付箋ウィジェット（メモごとに複数配置可。タップするとホーム画面を背後に残したまま、通常と同じ編集画面で編集できる）
 - JSON ファイルへのバックアップとインポート
 - Google Drive へのバックアップと復元（任意・手動。利用者はアプリ内で Google アカウントに接続するだけで利用可能）
 - ダーク / ライトテーマ（端末設定に追従）・一覧レイアウト切り替え（Zustand で永続化）
@@ -72,6 +73,8 @@ npx expo run:android
 ```
 
 `expo run:android` は初回実行時に `expo prebuild` を自動で行い、`android/` ディレクトリを生成します。
+
+ウィジェットのネイティブコード（Kotlin・AndroidManifest・リソース）は `modules/memoez-widget/android/` にあり、`expo-modules-autolinking` が自動で取り込みます。生成物である `android/` を直接編集する必要はなく、`expo prebuild --clean` で作り直しても失われません。
 
 開発時に Google Drive バックアップを試す場合のみ、開発者が `.env.example` を `.env` にコピーして Client ID を設定してください（[docs/google-drive-setup.md](docs/google-drive-setup.md)）。Expo Go では動作しません。
 
@@ -151,6 +154,9 @@ memoez/
 │   ├── search.tsx              # 検索画面
 │   ├── labels.tsx              # ラベル管理画面
 │   └── backup.tsx              # バックアップ画面（端末 / Google Drive）
+├── index.ts                    # エントリポイント（Expo Router + ウィジェット用ウィンドウを登録）
+├── modules/
+│   └── memoez-widget/          # ホーム画面ウィジェット（ローカル Expo モジュール / Kotlin）
 ├── src/
 │   ├── domain/                 # 純粋な型・インターフェース（FW依存なし）
 │   ├── data/                   # Drizzle 実装・DB・マイグレーション
@@ -171,3 +177,4 @@ memoez/
 | [docs/google-drive-setup.md](docs/google-drive-setup.md) | 開発者向け Google Drive 連携設定（Cloud Console・Client ID・SHA-1・CI） |
 | [docs/ci-cd.md](docs/ci-cd.md) | CI/CD ワークフロー・署名設定手順 |
 | [docs/release-note.md](docs/release-note.md) | 全バージョンのリリースノート（新しい順） |
+| [docs/release-checklist-v0.4.0.md](docs/release-checklist-v0.4.0.md) | v0.4.0（ウィジェット）の実機確認項目 |

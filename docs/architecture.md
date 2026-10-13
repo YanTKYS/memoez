@@ -156,6 +156,54 @@ exportBackupJson (domain/usecases/backupJson.ts)  ──►  JSON
 - **ui/hooks/useGoogleDriveBackup.ts**: 接続状態・最終バックアップ日時・結果表示の状態管理。
 - 要求スコープは `drive.appdata` のみ。セットアップは [google-drive-setup.md](google-drive-setup.md)。
 
+## ホーム画面ウィジェット（v0.4.0）
+
+メモを付箋としてホーム画面に表示し、タップするとホーム画面を背後に残したまま編集ウィンドウを開きます。オーバーレイ権限（`SYSTEM_ALERT_WINDOW`）は使わず、透過テーマの Activity で実現しています。
+
+```
+ホーム画面
+  └─ NoteWidgetProvider（AppWidgetProvider）── WidgetStore（SharedPreferences）のスナップショットを描画
+       │ タップ
+       ▼
+  FloatingEditorActivity / WidgetConfigActivity（透過・別タスクの ReactActivity）
+       │ 同じ ReactNativeHost ＝ 同じ JS ランタイム
+       ▼
+  index.ts で登録した "MemoEZWidgetWindow"（src/ui/widget/WidgetWindowRoot）
+       ├─ 編集: FloatingNoteEditor → 既存の EditNoteScreen / useEditNote（presentation="floating"）
+       └─ 配置時のメモ選択: WidgetNotePicker
+```
+
+### 構成
+
+| 場所 | 内容 |
+|------|------|
+| `modules/memoez-widget/android/` | ローカル Expo モジュール（Kotlin）。Provider・Activity・テーマ・レイアウト・マニフェストを含み、Gradle のマニフェストマージでアプリへ取り込まれる。`android/` は生成物のままで、`expo prebuild --clean` の影響を受けない |
+| `src/ui/widget/` | ウィンドウのルート・カード表示（`FloatingWindow`）・編集・メモ選択 |
+| `src/lib/widget/` | ネイティブモジュールの呼び出し（`widgetBridge`）、表示用スナップショット生成（`widgetSnapshot`）、同期（`widgetSync`） |
+| `src/lib/noteChangeEvents.ts` | メモ変更の通知（同一 JS ランタイム内の pub/sub。150ms でまとめて配信） |
+| `src/data/repositories/ChangeNotifyingNoteRepository.ts` | 書き込み成功後に変更を通知する `INoteRepository` のデコレータ（`di.ts` で常に適用） |
+
+### データの流れ
+
+- **正は SQLite のみ**。ウィジェットが描画する内容（タイトル・本文・チェックリスト・期限・配色）は、JS が既存の Repository で読み出した「表示用スナップショット」を `WidgetStore`（SharedPreferences）に保存したもの。プロセス終了・端末再起動後もランチャーの再描画要求にはここから応答する。
+- ネイティブ側から SQLite を直接開かないのは、Android 標準の SQLite と expo-sqlite 同梱の SQLite が同じプロセスで同じ DB ファイルを開くと、POSIX ロックが互いに解除され DB 破損の原因になるため（[SQLite: How To Corrupt 2.2.1](https://www.sqlite.org/howtocorrupt.html)）。
+- 更新契機: `getNoteRepository()` の書き込み（編集・ピン留め・削除・バックアップ復元などすべて）→ `notifyNotesChanged()` → `startWidgetSync()` がウィジェットに表示中のメモを読み直して `updateSnapshots`。内容が変わったウィジェットだけ描画し直す。アプリ／ウィンドウ起動時にも 1 回同期する。
+- 削除されたメモ（`findById` が null）は「このメモは削除されました」表示になり、タップでメモを選び直せる。ウィジェットを削除すると対応とスナップショットを片付ける。
+
+### 通常画面との共通化・競合対策
+
+- `EditNoteScreen` / `useEditNote` / `LabelManagerScreen` から Expo Router への依存を外し、「閉じる」「ラベル管理を開く」を props で受け取る。通常画面（`app/note/*`, `app/labels.tsx`）は `router.back()` / `router.push()` を、ウィンドウはウィンドウを閉じる処理・重ね表示を渡す。編集 UI・自動保存・ラベル・カラー・期限・削除はすべて同じコード。
+- `presentation="floating"` では Appbar のステータスバー余白とセーフエリア余白を付けない（ウィンドウ側で余白を取る）。
+- 通常画面とウィンドウは同じ JS ランタイムで動くため、`useEditNote` は変更通知を受けると、未編集なら最新の内容を読み直す（入力中なら保持し、次の保存で後勝ち）。他方で削除されたら以後保存しない。読み直しは保存と同じ Promise チェーンに積み、自分の保存の途中経過を読まないようにしている。
+- 自動保存の待ち時間中にアプリが裏に回った／画面が破棄された場合も、その時点の内容を保存する。ウィンドウはホームボタン等で離れると閉じる（`onUserLeaveHint`）。
+- `initDatabase()` は初期化結果を共有し、どちらが先に起動しても DB を開くのは 1 回だけ。
+
+### タスク・ライフサイクル
+
+- ウィンドウ用 Activity は `taskAffinity="${applicationId}.widget"`・`excludeFromRecents`。MemoEZ 本体のタスクを前面に出さないため、背後はホーム画面のまま。ウィジェットからは `NEW_TASK | CLEAR_TASK` で開き、前回のウィンドウが残っていれば置き換える。
+- 透過 Activity に画面向きを固定すると Android 8.0 で例外になるため、`screenOrientation` は指定しない。`configChanges` は MainActivity と揃え、テーマ切り替えで React Native の画面を作り直さない。
+- キーボード表示時は `adjustResize` でウィンドウが縮み、カードもそれに合わせて縮む。
+
 ## 楽観的更新パターン
 
 ラベルのトグルなど即時反応が求められる操作では、**UI 先行更新 → 非同期 DB 書き込み → エラー時にスナップショット復元** というパターンを採用しています。
