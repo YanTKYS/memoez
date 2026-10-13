@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="memoez_widget_label">MemoEZ 付箋</string>
+    <string name="memoez_widget_description">メモを付箋のようにホーム画面に表示します。タップするとホーム画面のまま編集できます。</string>
+    <string name="memoez_widget_not_configured">タップして表示するメモを選択</string>
+    <string name="memoez_widget_deleted_title">このメモは削除されました</string>
+    <string name="memoez_widget_deleted_body">タップして別のメモを選択</string>
+    <string name="memoez_widget_unavailable">タップして開く</string>
+    <string name="memoez_widget_empty_note">（空のメモ）</string>
+    <string name="memoez_widget_checklist_progress">%1$d / %2$d 完了</string>
+    <string name="memoez_widget_preview_title">買い物</string>
+    <string name="memoez_widget_preview_body">☐ 牛乳\n☑ パン\n☐ たまご</string>
+</resources>
