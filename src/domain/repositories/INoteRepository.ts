@@ -21,6 +21,11 @@ export interface UpdateNoteInput {
 export interface INoteRepository {
   findAll(options?: { archived?: boolean }): Promise<Note[]>;
   findById(id: number): Promise<Note | null>;
+  /**
+   * 最近のメモ（ピン留め優先 → 更新日時の新しい順）。アーカイブ済み・削除済みは含まない。
+   * ホーム画面の一覧ウィジェット用。
+   */
+  findRecent(limit: number): Promise<Note[]>;
   search(query: string): Promise<Note[]>;
   findByLabel(labelId: number): Promise<Note[]>;
   create(input: CreateNoteInput): Promise<Note>;

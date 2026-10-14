@@ -21,6 +21,8 @@ internal object WidgetStore {
   private const val PREFS_NAME = "memoez_widget"
   private const val WIDGET_PREFIX = "widget."
   private const val NOTE_PREFIX = "note."
+  /** 4×2 一覧ウィジェットの表示内容（全ウィジェット共通。JSON） */
+  private const val LIST_KEY = "list.snapshot"
 
   private fun prefs(context: Context): SharedPreferences =
     context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -117,8 +119,32 @@ internal object WidgetStore {
     editor.commit()
   }
 
+  /** 2×2 付箋ウィジェットの設定・表示内容だけを消す（一覧ウィジェットの内容は残す） */
   @Synchronized
-  fun clear(context: Context) {
-    prefs(context).edit().clear().commit()
+  fun clearNoteWidgets(context: Context) {
+    val p = prefs(context)
+    val editor = p.edit()
+    p.all.keys
+      .filter { it.startsWith(WIDGET_PREFIX) || it.startsWith(NOTE_PREFIX) }
+      .forEach { editor.remove(it) }
+    editor.commit()
+  }
+
+  // ─── 一覧ウィジェット ──────────────────────────────────────────────────
+
+  fun listSnapshot(context: Context): String? = prefs(context).getString(LIST_KEY, null)
+
+  /** 一覧の表示内容を保存し、変わったら true（変わらなければ描画し直さない） */
+  @Synchronized
+  fun saveListSnapshot(context: Context, json: String): Boolean {
+    val p = prefs(context)
+    if (p.getString(LIST_KEY, null) == json) return false
+    p.edit().putString(LIST_KEY, json).commit()
+    return true
+  }
+
+  @Synchronized
+  fun clearList(context: Context) {
+    prefs(context).edit().remove(LIST_KEY).commit()
   }
 }

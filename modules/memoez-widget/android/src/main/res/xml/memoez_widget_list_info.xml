@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4×2 一覧ウィジェットの定義。表示するメモは自動で決まる（ピン留め優先 → 更新日時順、最大 50 件）
+  ため、配置時の設定画面はない。表示内容はアプリ側の保存時に更新するので定期更新は使わない。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/memoez_list_widget_description"
+    android:initialLayout="@layout/memoez_widget_list"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
+    android:previewLayout="@layout/memoez_widget_list_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

@@ -2,6 +2,7 @@ import type { INoteRepository } from '@/domain/repositories/INoteRepository';
 import { getNoteRepository } from '@/lib/di';
 import { subscribeNotesChanged } from '@/lib/noteChangeEvents';
 import { widgetBridge, type WidgetBridge } from './widgetBridge';
+import { buildWidgetListSnapshot, WIDGET_LIST_LIMIT } from './widgetListSnapshot';
 import { buildWidgetSnapshot } from './widgetSnapshot';
 
 export interface WidgetSyncDeps {
@@ -12,21 +13,29 @@ export interface WidgetSyncDeps {
 const defaultDeps: WidgetSyncDeps = { bridge: widgetBridge, getRepo: getNoteRepository };
 
 /**
- * ホーム画面のウィジェットが表示しているメモを SQLite から読み直し、表示内容を更新する。
- * 削除済み（見つからない）メモは「削除されました」表示になる。
+ * ホーム画面のウィジェットの表示内容を SQLite から作り直す。
+ * - 2×2 付箋: 表示しているメモだけを読み直す。削除済み（見つからない）メモは「削除されました」表示
+ * - 4×2 一覧: 配置されているときだけ、最近のメモ（ピン留め優先 → 更新日時順、最大 50 件）を読み直す。
+ *   メモの追加・削除・並び替えは、特定メモの更新では追えないため一覧ごと作り直す
  */
 export async function syncWidgetsOnce(deps: WidgetSyncDeps = defaultDeps): Promise<void> {
   const { bridge, getRepo } = deps;
   if (!bridge.isAvailable()) return;
 
   const noteIds = [...new Set(bridge.getBoundNoteIds())];
-  if (noteIds.length === 0) return;
+  const hasList = bridge.hasListWidgets();
+  if (noteIds.length === 0 && !hasList) return;
 
   const repo = getRepo();
-  const snapshots = await Promise.all(
-    noteIds.map(async (id) => buildWidgetSnapshot(id, await repo.findById(id))),
-  );
-  await bridge.updateSnapshots(snapshots);
+  if (noteIds.length > 0) {
+    const snapshots = await Promise.all(
+      noteIds.map(async (id) => buildWidgetSnapshot(id, await repo.findById(id))),
+    );
+    await bridge.updateSnapshots(snapshots);
+  }
+  if (hasList) {
+    await bridge.updateListSnapshot(buildWidgetListSnapshot(await repo.findRecent(WIDGET_LIST_LIMIT)));
+  }
 }
 
 /**
@@ -71,5 +80,6 @@ export function startWidgetSync(): void {
   if (started || !widgetBridge.isAvailable()) return;
   started = true;
   subscribeNotesChanged(() => { requestWidgetSync(); });
+  widgetBridge.addListSyncRequestListener(() => { requestWidgetSync(); });
   requestWidgetSync();
 }

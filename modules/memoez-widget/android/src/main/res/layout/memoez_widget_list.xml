@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4×2 一覧ウィジェット。行は NoteListWidgetService（RemoteViewsService）が供給する。
+  @android:id/background はランチャー（Android 12+）が角丸の切り抜きに使う。
+  2 セルの高さ（最小 110dp）でも 2 行が収まるよう、見出しは置かず上下の余白も詰めている
+  （日本語の行の高さ ≒ 47dp × 2 + 上下 10dp）。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/memoez_list_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/memoez_widget_bg" />
+
+    <ListView
+        android:id="@+id/memoez_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:divider="@null"
+        android:dividerHeight="0dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="4dp"
+        android:scrollbars="none" />
+
+    <TextView
+        android:id="@+id/memoez_list_empty"
+        style="@style/MemoEZWidgetText"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:padding="16dp"
+        android:textSize="13sp" />
+</FrameLayout>

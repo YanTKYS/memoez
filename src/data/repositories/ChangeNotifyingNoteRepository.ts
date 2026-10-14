@@ -23,6 +23,7 @@ export class ChangeNotifyingNoteRepository implements INoteRepository {
   // ─── 読み取り（通知なし） ────────────────────────────────────────────────
   findAll(options?: { archived?: boolean }): Promise<Note[]> { return this.inner.findAll(options); }
   findById(id: number): Promise<Note | null>                  { return this.inner.findById(id); }
+  findRecent(limit: number): Promise<Note[]>                  { return this.inner.findRecent(limit); }
   search(query: string): Promise<Note[]>                      { return this.inner.search(query); }
   findByLabel(labelId: number): Promise<Note[]>               { return this.inner.findByLabel(labelId); }
   maxSortWeight(): Promise<number>                            { return this.inner.maxSortWeight(); }

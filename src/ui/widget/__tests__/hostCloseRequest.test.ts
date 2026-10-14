@@ -30,6 +30,7 @@ jest.mock('@/lib/widget/widgetBridge', () => {
     widgetBridge: {
       isAvailable: () => true,
       getBoundNoteIds: () => state.boundNoteIds,
+      hasListWidgets: () => false,
       updateSnapshots: async (snapshots: { body: string }[]) => {
         state.log.push(`snapshot:${snapshots[0]?.body}`);
       },

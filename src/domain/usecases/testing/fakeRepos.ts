@@ -36,6 +36,15 @@ export class FakeNoteRepo implements INoteRepository {
     return this.notes.filter((n) => n.isArchived === archived && n.deletedAt === null);
   }
   async findById(id: number): Promise<Note | null> { return this.notes.find((n) => n.id === id && n.deletedAt === null) ?? null; }
+  async findRecent(limit: number): Promise<Note[]> {
+    return this.notes
+      .filter((n) => !n.isArchived && n.deletedAt === null)
+      .sort((a, b) =>
+        Number(b.isPinned) - Number(a.isPinned)
+        || b.updatedAt.getTime() - a.updatedAt.getTime()
+        || b.id - a.id)
+      .slice(0, limit);
+  }
   async search(_query: string): Promise<Note[]> { return []; }
   async findByLabel(labelId: number): Promise<Note[]> {
     return this.notes.filter((n) => n.labels.some((l) => l.id === labelId) && n.deletedAt === null);
@@ -71,12 +80,14 @@ export class FakeNoteRepo implements INoteRepository {
     if (input.color !== undefined) note.color = input.color;
     if (input.dueAt !== undefined) note.dueAt = input.dueAt;
     if (input.reminderAt !== undefined) note.reminderAt = input.reminderAt;
+    note.updatedAt = new Date();
     return note;
   }
   async togglePin(id: number): Promise<Note> {
     const note = await this.findById(id);
     if (!note) throw new Error('not found');
     note.isPinned = !note.isPinned;
+    note.updatedAt = new Date();
     return note;
   }
   async toggleArchive(id: number): Promise<Note> {
