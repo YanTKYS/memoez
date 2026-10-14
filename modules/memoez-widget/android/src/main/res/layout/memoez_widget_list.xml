@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4×2 一覧ウィジェット。行は NoteListWidgetService（RemoteViewsService）が供給する。
+  @android:id/background はランチャー（Android 12+）が角丸の切り抜きに使う。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/memoez_list_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/memoez_widget_bg" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/memoez_list_header"
+            style="@style/MemoEZWidgetText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="14dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="2dp"
+            android:text="@string/memoez_list_widget_header"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <ListView
+                android:id="@+id/memoez_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@null"
+                android:dividerHeight="0dp"
+                android:paddingBottom="6dp"
+                android:clipToPadding="false"
+                android:scrollbars="none" />
+
+            <TextView
+                android:id="@+id/memoez_list_empty"
+                style="@style/MemoEZWidgetText"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:padding="16dp"
+                android:textSize="13sp" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

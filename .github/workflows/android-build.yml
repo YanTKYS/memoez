@@ -159,17 +159,19 @@ jobs:
           APK=android/app/build/outputs/apk/debug/app-debug.apk
           AAPT2="$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -n1)/aapt2"
           unzip -p "$APK" 'classes*.dex' > /tmp/classes.dex
-          for cls in NoteWidgetProvider host/FloatingEditorActivity host/WidgetConfigActivity; do
+          for cls in NoteWidgetProvider NoteListWidgetProvider NoteListWidgetService host/FloatingEditorActivity host/WidgetConfigActivity; do
             grep -aq "Lexpo/modules/memoezwidget/$cls;" /tmp/classes.dex \
               || { echo "::error::expo.modules.memoezwidget.$cls not found in APK (autolinking / config plugin failed)"; exit 1; }
           done
           MANIFEST="$("$AAPT2" dump xmltree --file AndroidManifest.xml "$APK")"
-          for name in NoteWidgetProvider host.FloatingEditorActivity host.WidgetConfigActivity; do
+          for name in NoteWidgetProvider NoteListWidgetProvider NoteListWidgetService host.FloatingEditorActivity host.WidgetConfigActivity; do
             echo "$MANIFEST" | grep -q "expo.modules.memoezwidget.$name" \
               || { echo "::error::$name is not declared in the merged AndroidManifest.xml"; exit 1; }
           done
-          echo "$MANIFEST" | grep -q 'android.appwidget.provider' \
-            || { echo "::error::appwidget provider meta-data is missing"; exit 1; }
+          [ "$(echo "$MANIFEST" | grep -c 'android.appwidget.provider')" -ge 2 ] \
+            || { echo "::error::appwidget provider meta-data is missing (2x2 / 4x2)"; exit 1; }
+          echo "$MANIFEST" | grep -q 'android.permission.BIND_REMOTEVIEWS' \
+            || { echo "::error::list widget service must be protected by BIND_REMOTEVIEWS"; exit 1; }
           echo "Home screen widget is packaged"
 
       - name: Run Lint

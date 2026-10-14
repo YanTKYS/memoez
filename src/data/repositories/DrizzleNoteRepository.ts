@@ -115,6 +115,17 @@ export class DrizzleNoteRepository implements INoteRepository {
     return hydrated[0] ?? null;
   }
 
+  async findRecent(limit: number): Promise<Note[]> {
+    const rows = await this.db
+      .select()
+      .from(notes)
+      .where(and(isNull(notes.deletedAt), eq(notes.isArchived, false)))
+      .orderBy(desc(notes.isPinned), desc(notes.updatedAt), desc(notes.id))
+      .limit(limit);
+
+    return this.hydrateNotes(rows);
+  }
+
   async search(query: string): Promise<Note[]> {
     // チェックリストアイテム / ラベルにマッチする note_id を取得
     const [matchedItemNoteIds, matchedLabelNoteIds] = await Promise.all([

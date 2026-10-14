@@ -156,14 +156,21 @@ exportBackupJson (domain/usecases/backupJson.ts)  ──►  JSON
 - **ui/hooks/useGoogleDriveBackup.ts**: 接続状態・最終バックアップ日時・結果表示の状態管理。
 - 要求スコープは `drive.appdata` のみ。セットアップは [google-drive-setup.md](google-drive-setup.md)。
 
-## ホーム画面ウィジェット（v0.4.0）
+## ホーム画面ウィジェット（v0.4.0 / v0.5.0）
+
+2 種類のウィジェットがあります。どちらもタップすると同じフローティングエディタ（下記）を開きます。
+
+- **MemoEZ 付箋**（2×2、v0.4.0）: 配置時に選んだ 1 件のメモを表示する
+- **MemoEZ 一覧**（4×2、v0.5.0）: 最近のメモ（ピン留め優先 → 更新日時の新しい順、アーカイブ・削除済みを除く、最大 50 件）を縦スクロールで表示する。表示対象は自動で、設定画面はない
 
 メモを付箋としてホーム画面に表示し、タップするとホーム画面を背後に残したまま編集ウィンドウを開きます。オーバーレイ権限（`SYSTEM_ALERT_WINDOW`）は使わず、透過テーマの Activity で実現しています。
 
 ```
 ホーム画面
-  └─ NoteWidgetProvider（AppWidgetProvider）── WidgetStore（SharedPreferences）のスナップショットを描画
-       │ タップ
+  ├─ NoteWidgetProvider（2×2）────────┐
+  └─ NoteListWidgetProvider（4×2）     ├─ WidgetStore（SharedPreferences）のスナップショットを描画
+       └─ NoteListWidgetService（RemoteViews コレクション。行を供給）┘
+       │ タップ（一覧は行ごとの fill-in Intent でメモ ID を渡す）
        ▼
   FloatingEditorActivity / WidgetConfigActivity（透過・別タスクの ReactActivity。
        │   prebuild 時に config plugin がアプリ側へ生成し、ReactActivityDelegateWrapper で包む）
@@ -191,6 +198,14 @@ exportBackupJson (domain/usecases/backupJson.ts)  ──►  JSON
 - ネイティブ側から SQLite を直接開かないのは、Android 標準の SQLite と expo-sqlite 同梱の SQLite が同じプロセスで同じ DB ファイルを開くと、POSIX ロックが互いに解除され DB 破損の原因になるため（[SQLite: How To Corrupt 2.2.1](https://www.sqlite.org/howtocorrupt.html)）。
 - 更新契機: `getNoteRepository()` の書き込み（編集・ピン留め・削除・バックアップ復元などすべて）→ `notifyNotesChanged()` → `startWidgetSync()` がウィジェットに表示中のメモを読み直して `updateSnapshots`。内容が変わったウィジェットだけ描画し直す。アプリ／ウィンドウ起動時にも 1 回同期する。
 - 削除されたメモ（`findById` が null）は「このメモは削除されました」表示になり、タップでメモを選び直せる。ウィジェットを削除すると対応とスナップショットを片付ける。
+
+### 一覧ウィジェット（4×2）
+
+- 一覧はメモの追加・削除・並び替えで内容が変わるため、2×2 のような「表示中のメモだけ読み直す」方式では追えない。同期のたびに `findRecent(50)`（`is_pinned DESC, updated_at DESC` + LIMIT、アーカイブ・削除済みを除く）で作り直し、1 つのスナップショット（`list.snapshot`）として保存する。
+- 一覧ウィジェットが配置されていないとき（`hasListWidgets()` が false）は一覧のクエリ自体を行わないため、2×2 だけの利用では同期の負荷は変わらない。
+- ネイティブ側は内容が変わったときだけ `notifyAppWidgetViewDataChanged` で行を読み直させる（枠は内容が初めて作られたときだけ描画し直す）。行の供給（`RemoteViewsFactory`）は保存済みの JSON を読むだけで、SQLite には触れない。
+- 行のタップは、一覧全体の `setPendingIntentTemplate`（明示的な Activity 指定・Android 12 以降は `FLAG_MUTABLE`）に、行ごとの `setOnClickFillInIntent` でメモ ID を足して開く。Intent に data（URI）は付けない（Expo Router へ届かないように）。2×2 の PendingIntent とは action を分けている。
+- 内容がまだない一覧ウィジェットを配置したとき、アプリが動いていればネイティブから JS に同期を依頼する（`onListSyncRequested`）。動いていなければ「MemoEZ を開くと一覧を表示します」を表示し、タップで本体を起動する（起動時の同期で内容が作られる）。
 
 ### 通常画面との共通化・競合対策
 

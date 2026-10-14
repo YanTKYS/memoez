@@ -17,7 +17,7 @@ class MemoEZWidgetModule : Module() {
     Name("MemoEZWidget")
 
     /** ホームボタン等でウィンドウを離れたとき、保存してから閉じるよう JS に依頼する */
-    Events(EVENT_CLOSE_REQUESTED)
+    Events(EVENT_CLOSE_REQUESTED, EVENT_LIST_SYNC_REQUESTED)
 
     OnCreate { current = WeakReference(this@MemoEZWidgetModule) }
 
@@ -42,6 +42,19 @@ class MemoEZWidgetModule : Module() {
     AsyncFunction("updateSnapshots") { snapshotsJson: String ->
       val changed = WidgetStore.saveSnapshots(context, snapshotsJson)
       NoteWidgetProvider.renderNotes(context, changed)
+    }
+
+    /** 4×2 一覧ウィジェットがホーム画面にあるか（なければ JS は一覧の内容を作らない） */
+    Function("hasListWidgets") {
+      NoteListWidgetProvider.widgetIds(context).isNotEmpty()
+    }
+
+    /** 一覧ウィジェットの内容を保存し、変わったときだけ行を読み直してもらう */
+    AsyncFunction("updateListSnapshot") { snapshotJson: String ->
+      val firstTime = WidgetStore.listSnapshot(context) == null
+      if (WidgetStore.saveListSnapshot(context, snapshotJson)) {
+        NoteListWidgetProvider.refresh(context, redrawFrame = firstTime)
+      }
     }
 
     /** 配置時・選び直し時のメモ選択を確定する */
@@ -75,6 +88,7 @@ class MemoEZWidgetModule : Module() {
 
   companion object {
     private const val EVENT_CLOSE_REQUESTED = "onCloseRequested"
+    private const val EVENT_LIST_SYNC_REQUESTED = "onListSyncRequested"
 
     @Volatile
     private var current: WeakReference<MemoEZWidgetModule>? = null
@@ -86,6 +100,11 @@ class MemoEZWidgetModule : Module() {
      * JS に「保存して閉じる」を依頼する。引き受け手（編集ウィンドウ）がいなければ false を返し、
      * 呼び出し側（MemoEZWindowActivity）がそのまま閉じる。
      */
+    /** 一覧ウィジェットの内容を作るよう JS に依頼する（アプリが動いていなければ何もしない） */
+    internal fun requestListSync() {
+      current?.get()?.sendEvent(EVENT_LIST_SYNC_REQUESTED, emptyMap<String, Any?>())
+    }
+
     internal fun requestWindowClose(): Boolean {
       val module = current?.get() ?: return false
       if (!closeHandlerActive) return false

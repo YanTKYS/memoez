@@ -18,4 +18,6 @@ internal object WidgetContract {
   const val EXTRA_NOTE_ID = "expo.modules.memoezwidget.NOTE_ID"
   const val ACTION_OPEN_NOTE = "expo.modules.memoezwidget.OPEN_NOTE"
   const val ACTION_RECONFIGURE = "expo.modules.memoezwidget.RECONFIGURE"
+  /** 一覧ウィジェットの行から開く（2×2 の PendingIntent と区別するため別の action にする） */
+  const val ACTION_OPEN_NOTE_FROM_LIST = "expo.modules.memoezwidget.OPEN_NOTE_FROM_LIST"
 }

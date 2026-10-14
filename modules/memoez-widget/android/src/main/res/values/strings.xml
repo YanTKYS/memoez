@@ -10,4 +10,10 @@
     <string name="memoez_widget_checklist_progress">%1$d / %2$d 完了</string>
     <string name="memoez_widget_preview_title">買い物</string>
     <string name="memoez_widget_preview_body">☐ 牛乳\n☑ パン\n☐ たまご</string>
+    <string name="memoez_list_widget_label">MemoEZ 一覧</string>
+    <string name="memoez_list_widget_description">最近更新したメモを一覧表示します。タップするとホーム画面のまま編集できます。</string>
+    <string name="memoez_list_widget_header">MemoEZ</string>
+    <string name="memoez_list_widget_empty">メモはありません</string>
+    <string name="memoez_list_widget_not_synced">MemoEZ を開くと一覧を表示します</string>
+    <string name="memoez_list_widget_preview_line">1/3 完了・パン、たまご</string>
 </resources>

@@ -34,8 +34,8 @@ class NoteWidgetProvider : AppWidgetProvider() {
   }
 
   override fun onDisabled(context: Context) {
-    // 最後のウィジェットが削除された
-    WidgetStore.clear(context)
+    // 最後の付箋ウィジェットが削除された（一覧ウィジェットの表示内容は残す）
+    WidgetStore.clearNoteWidgets(context)
   }
 
   companion object {

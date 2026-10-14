@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ウィジェット追加画面（Android 12+）に表示する一覧ウィジェットのプレビュー -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/memoez_widget_list_preview_bg"
+    android:clipToOutline="true"
+    android:orientation="vertical"
+    android:paddingStart="14dp"
+    android:paddingTop="10dp"
+    android:paddingEnd="14dp">
+
+    <TextView
+        style="@style/MemoEZWidgetText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="6dp"
+        android:text="@string/memoez_list_widget_header"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        style="@style/MemoEZWidgetText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/memoez_widget_preview_title"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        style="@style/MemoEZWidgetText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:alpha="0.7"
+        android:maxLines="1"
+        android:text="@string/memoez_list_widget_preview_line"
+        android:textSize="12sp" />
+</LinearLayout>

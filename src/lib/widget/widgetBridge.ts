@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
+import type { WidgetListSnapshot } from './widgetListSnapshot';
 import type { WidgetNoteSnapshot } from './widgetSnapshot';
 
 export interface Subscription {
@@ -10,12 +11,14 @@ export interface Subscription {
 interface MemoEZWidgetNativeModule {
   getBoundNoteIds(): number[];
   updateSnapshots(snapshotsJson: string): Promise<void>;
+  hasListWidgets(): boolean;
+  updateListSnapshot(snapshotJson: string): Promise<void>;
   completeConfiguration(appWidgetId: number, noteId: number, snapshotJson: string): Promise<void>;
   closeWindow(): boolean;
   setCloseHandlerActive(active: boolean): void;
   keepWindowOpen(): void;
   acknowledgeCloseRequest(): void;
-  addListener(eventName: 'onCloseRequested', listener: () => void): Subscription;
+  addListener(eventName: 'onCloseRequested' | 'onListSyncRequested', listener: () => void): Subscription;
 }
 
 export interface WidgetBridge {
@@ -25,6 +28,12 @@ export interface WidgetBridge {
   getBoundNoteIds(): number[];
   /** 表示内容を更新する（内容が変わったウィジェットだけ描画し直される） */
   updateSnapshots(snapshots: WidgetNoteSnapshot[]): Promise<void>;
+  /** 4×2 一覧ウィジェットがホーム画面にあるか（なければ一覧の内容は作らない） */
+  hasListWidgets(): boolean;
+  /** 一覧ウィジェットの内容を更新する（変わったときだけ描画し直される） */
+  updateListSnapshot(snapshot: WidgetListSnapshot): Promise<void>;
+  /** 一覧の内容がまだない一覧ウィジェットが配置されたとき（同期を依頼される） */
+  addListSyncRequestListener(listener: () => void): Subscription;
   /** ウィジェットに表示するメモを確定し、メモ選択ウィンドウを閉じる */
   completeConfiguration(appWidgetId: number, snapshot: WidgetNoteSnapshot): Promise<void>;
   /** ウィジェットから開いたウィンドウを閉じてホーム画面に戻る（閉じる対象があれば true） */
@@ -60,6 +69,13 @@ export const widgetBridge: WidgetBridge = {
     if (!native || snapshots.length === 0) return;
     await native.updateSnapshots(JSON.stringify(snapshots));
   },
+  hasListWidgets: () => native?.hasListWidgets() ?? false,
+  updateListSnapshot: async (snapshot) => {
+    if (!native) return;
+    await native.updateListSnapshot(JSON.stringify(snapshot));
+  },
+  addListSyncRequestListener: (listener) =>
+    native?.addListener('onListSyncRequested', listener) ?? { remove: () => {} },
   completeConfiguration: async (appWidgetId, snapshot) => {
     if (!native) return;
     await native.completeConfiguration(appWidgetId, snapshot.noteId, JSON.stringify(snapshot));
