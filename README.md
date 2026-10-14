@@ -74,7 +74,7 @@ npx expo run:android
 
 `expo run:android` は初回実行時に `expo prebuild` を自動で行い、`android/` ディレクトリを生成します。
 
-ウィジェットのネイティブコード（Kotlin・AndroidManifest・リソース）は `modules/memoez-widget/android/` にあり、`expo-modules-autolinking` が自動で取り込みます。生成物である `android/` を直接編集する必要はなく、`expo prebuild --clean` で作り直しても失われません。
+ウィジェットのネイティブコード（Kotlin・AndroidManifest・リソース）は `modules/memoez-widget/android/` にあり、`expo-modules-autolinking` が自動で取り込みます。ウィンドウ用 Activity は同モジュールの config plugin（`app.json` の `plugins` に登録済み）が prebuild 時にアプリ側へ生成します。生成物である `android/` を直接編集する必要はなく、`expo prebuild --clean` で作り直しても失われません。
 
 開発時に Google Drive バックアップを試す場合のみ、開発者が `.env.example` を `.env` にコピーして Client ID を設定してください（[docs/google-drive-setup.md](docs/google-drive-setup.md)）。Expo Go では動作しません。
 

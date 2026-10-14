@@ -55,6 +55,15 @@ const requestWidgetSync = createWidgetSyncer();
 let started = false;
 
 /**
+ * 今すぐウィジェットを同期し、完了まで待つ。
+ * 変更通知はタイマーでまとめて配信するが、Android ではアプリがバックグラウンドの間
+ * JS のタイマーが止まるため、ウィンドウを閉じる直前はこちらで同期を済ませておく。
+ */
+export function syncWidgetsNow(): Promise<void> {
+  return requestWidgetSync();
+}
+
+/**
  * メモの変更通知を購読してウィジェットへ反映する。DB 初期化後に呼ぶ（2 回目以降は何もしない）。
  * 起動時にも 1 回同期し、前回終了時に反映しきれなかった差分を埋める。
  */

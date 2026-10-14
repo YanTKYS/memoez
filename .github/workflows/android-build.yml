@@ -151,16 +151,20 @@ jobs:
             && echo "RNGoogleSigninModule is linked" \
             || { echo "::error::RNGoogleSigninModule not found in APK (autolinking failed)"; exit 1; }
 
-      # ホーム画面ウィジェット（ローカル Expo モジュール modules/memoez-widget）が
-      # prebuild 後の APK にコード・マニフェストとも組み込まれていることを確認する
+      # ホーム画面ウィジェット（ローカル Expo モジュール modules/memoez-widget と、
+      # その config plugin が生成するウィンドウ用 Activity）が prebuild 後の APK に
+      # コード・マニフェストとも組み込まれていることを確認する
       - name: Verify home screen widget is packaged
         run: |
           APK=android/app/build/outputs/apk/debug/app-debug.apk
           AAPT2="$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -n1)/aapt2"
-          unzip -p "$APK" 'classes*.dex' | grep -aq 'Lexpo/modules/memoezwidget/NoteWidgetProvider;' \
-            || { echo "::error::memoez-widget classes not found in APK (autolinking failed)"; exit 1; }
+          unzip -p "$APK" 'classes*.dex' > /tmp/classes.dex
+          for cls in NoteWidgetProvider host/FloatingEditorActivity host/WidgetConfigActivity; do
+            grep -aq "Lexpo/modules/memoezwidget/$cls;" /tmp/classes.dex \
+              || { echo "::error::expo.modules.memoezwidget.$cls not found in APK (autolinking / config plugin failed)"; exit 1; }
+          done
           MANIFEST="$("$AAPT2" dump xmltree --file AndroidManifest.xml "$APK")"
-          for name in NoteWidgetProvider FloatingEditorActivity WidgetConfigActivity; do
+          for name in NoteWidgetProvider host.FloatingEditorActivity host.WidgetConfigActivity; do
             echo "$MANIFEST" | grep -q "expo.modules.memoezwidget.$name" \
               || { echo "::error::$name is not declared in the merged AndroidManifest.xml"; exit 1; }
           done

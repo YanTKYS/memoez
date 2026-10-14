@@ -29,6 +29,7 @@
     },
     "plugins": [
       "expo-router",
+      "./modules/memoez-widget/plugin/withMemoEZWidget",
       [
         "expo-sqlite",
         {

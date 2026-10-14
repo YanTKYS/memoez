@@ -5,7 +5,7 @@
   - 表示内容はアプリ側の保存時に更新するため、定期更新（updatePeriodMillis）は使わない
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:configure="expo.modules.memoezwidget.WidgetConfigActivity"
+    android:configure="expo.modules.memoezwidget.host.WidgetConfigActivity"
     android:description="@string/memoez_widget_description"
     android:initialLayout="@layout/memoez_widget_note"
     android:minWidth="110dp"

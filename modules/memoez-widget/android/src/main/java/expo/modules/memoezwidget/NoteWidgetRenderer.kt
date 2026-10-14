@@ -5,7 +5,6 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Build
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -153,10 +152,11 @@ internal object NoteWidgetRenderer {
 
   /** フローティングエディタ。MemoEZ 本体とは別タスクで開き、閉じるとホーム画面に戻る */
   private fun editorIntent(context: Context, appWidgetId: Int, noteId: Int): PendingIntent {
-    val intent = Intent(context, FloatingEditorActivity::class.java).apply {
+    // data（URI）は付けない。Expo のライフサイクル通知（expo-linking）がディープリンクとして扱い、
+    // 同じ JS ランタイムの通常画面（Expo Router）に届いてしまうため。
+    // PendingIntent はウィジェットごとの requestCode で区別する。
+    val intent = Intent().setClassName(context, WidgetContract.EDITOR_ACTIVITY).apply {
       action = WidgetContract.ACTION_OPEN_NOTE
-      // PendingIntent をウィジェットごとに区別するための URI（extras だけでは同一視される）
-      data = Uri.parse("memoez-widget://widget/$appWidgetId/note/$noteId")
       putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
       putExtra(WidgetContract.EXTRA_NOTE_ID, noteId)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -166,9 +166,8 @@ internal object NoteWidgetRenderer {
 
   /** 表示するメモの選び直し（削除済み・未設定のとき） */
   private fun configureIntent(context: Context, appWidgetId: Int): PendingIntent {
-    val intent = Intent(context, WidgetConfigActivity::class.java).apply {
+    val intent = Intent().setClassName(context, WidgetContract.CONFIG_ACTIVITY).apply {
       action = WidgetContract.ACTION_RECONFIGURE
-      data = Uri.parse("memoez-widget://widget/$appWidgetId/configure")
       putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
     }

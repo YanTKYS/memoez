@@ -8,8 +8,9 @@ import android.os.Bundle
 /**
  * ウィジェット配置時（および選び直し時）に、表示するメモを選ぶウィンドウ。
  * 選択が完了したら MemoEZWidgetModule.completeConfiguration から finishConfigured() が呼ばれる。
+ * マニフェストに登録するのはアプリ側のサブクラス（[WidgetContract.CONFIG_ACTIVITY]）。
  */
-class WidgetConfigActivity : MemoEZWindowActivity() {
+abstract class WidgetConfigActivityBase : MemoEZWindowActivity() {
   private val appWidgetId: Int
     get() = intent?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
       ?: AppWidgetManager.INVALID_APPWIDGET_ID

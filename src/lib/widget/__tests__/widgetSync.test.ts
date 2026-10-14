@@ -14,6 +14,8 @@ function fakeBridge(boundNoteIds: number[], available = true) {
     updateSnapshots: async (snapshots) => { sent.push(snapshots); },
     completeConfiguration: async () => {},
     closeWindow: () => true,
+    setCloseHandlerActive: () => {},
+    addCloseRequestListener: () => ({ remove: () => {} }),
   };
   return { bridge, sent };
 }

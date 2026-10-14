@@ -3,7 +3,8 @@ import { BackHandler, StyleSheet, View } from 'react-native';
 import { EditNoteScreen } from '@/ui/screens/EditNoteScreen';
 import { LabelManagerScreen } from '@/ui/screens/LabelManagerScreen';
 import { FloatingWindow } from './FloatingWindow';
-import { closeWidgetWindow } from './closeWidgetWindow';
+import { closeWidgetWindow, exitWidgetWindow } from './closeWidgetWindow';
+import { useHostCloseRequest } from './useHostCloseRequest';
 
 interface Props {
   noteId: number;
@@ -22,22 +23,29 @@ export function FloatingNoteEditor({ noteId }: Props) {
   const openLabelManager  = useCallback(() => setShowLabelManager(true),  []);
   const closeLabelManager = useCallback(() => setShowLabelManager(false), []);
 
+  /** EditNoteScreen の「保存して閉じる」（戻るボタン・× と同じ。保存の完了を待つ） */
+  const saveAndClose = useCallback(() => {
+    if (closeRequestRef.current) closeRequestRef.current();
+    else closeWidgetWindow();
+  }, []);
+
+  // ホームボタン・履歴ボタンで離れたときも、保存してから閉じる
+  useHostCloseRequest(saveAndClose);
+
   const requestClose = useCallback(() => {
     if (showLabelManager) {
       setShowLabelManager(false);
-    } else if (closeRequestRef.current) {
-      closeRequestRef.current();
     } else {
-      closeWidgetWindow();
+      saveAndClose();
     }
-  }, [showLabelManager]);
+  }, [showLabelManager, saveAndClose]);
 
   return (
     <FloatingWindow onRequestClose={requestClose}>
       <EditNoteScreen
         noteId={noteId}
         presentation="floating"
-        onExit={closeWidgetWindow}
+        onExit={exitWidgetWindow}
         onOpenLabelManager={openLabelManager}
         closeRequestRef={closeRequestRef}
       />

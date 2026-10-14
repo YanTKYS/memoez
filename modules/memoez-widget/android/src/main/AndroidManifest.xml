@@ -1,35 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
     <!--
-      ウィジェットから開く編集ウィンドウ / 配置時のメモ選択ウィンドウ。
-      - 透過テーマ（Theme.MemoEZ.Floating）でホーム画面を背後に残す
-      - 通常の MemoEZ とは別のタスク（taskAffinity）で開き、MemoEZ 本体を前面に出さない
-      - 透過 Activity に画面向きを固定すると Android 8.0 で例外になるため screenOrientation は指定しない
-      - configChanges は MainActivity と揃え、テーマ切替などで React Native の画面を作り直さない
+      ウィジェットから開くウィンドウ（FloatingEditorActivity / WidgetConfigActivity）は、
+      Expo の ReactActivityDelegateWrapper を使うためアプリ側に生成し、config plugin
+      （modules/memoez-widget/plugin/withMemoEZWidget.js）がアプリのマニフェストに登録する。
     -->
-    <activity
-      android:name="expo.modules.memoezwidget.FloatingEditorActivity"
-      android:theme="@style/Theme.MemoEZ.Floating"
-      android:taskAffinity="${applicationId}.widget"
-      android:excludeFromRecents="true"
-      android:exported="false"
-      android:launchMode="standard"
-      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
-      android:windowSoftInputMode="adjustResize|stateHidden" />
-
-    <activity
-      android:name="expo.modules.memoezwidget.WidgetConfigActivity"
-      android:theme="@style/Theme.MemoEZ.Floating"
-      android:taskAffinity="${applicationId}.widget"
-      android:excludeFromRecents="true"
-      android:exported="true"
-      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
-      android:windowSoftInputMode="adjustResize|stateHidden">
-      <intent-filter>
-        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
-      </intent-filter>
-    </activity>
-
     <receiver
       android:name="expo.modules.memoezwidget.NoteWidgetProvider"
       android:label="@string/memoez_widget_label"
