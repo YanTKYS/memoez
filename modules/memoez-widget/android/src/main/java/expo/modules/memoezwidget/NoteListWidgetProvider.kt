@@ -76,9 +76,7 @@ class NoteListWidgetProvider : AppWidgetProvider() {
       launchAppIntent(context)?.let { views.setOnClickPendingIntent(R.id.memoez_list_empty, it) }
 
       views.setDayNightColor(context, R.id.memoez_list_bg, "setColorFilter", colors.backgroundLight, colors.backgroundDark)
-      for (id in intArrayOf(R.id.memoez_list_header, R.id.memoez_list_empty)) {
-        views.setDayNightColor(context, id, "setTextColor", colors.textLight, colors.textDark)
-      }
+      views.setDayNightColor(context, R.id.memoez_list_empty, "setTextColor", colors.textLight, colors.textDark)
       manager.updateAppWidget(appWidgetId, views)
     }
 

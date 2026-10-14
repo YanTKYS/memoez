@@ -8,17 +8,8 @@
     android:clipToOutline="true"
     android:orientation="vertical"
     android:paddingStart="14dp"
-    android:paddingTop="10dp"
+    android:paddingTop="8dp"
     android:paddingEnd="14dp">
-
-    <TextView
-        style="@style/MemoEZWidgetText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingBottom="6dp"
-        android:text="@string/memoez_list_widget_header"
-        android:textSize="13sp"
-        android:textStyle="bold" />
 
     <TextView
         style="@style/MemoEZWidgetText"
@@ -33,7 +24,7 @@
         style="@style/MemoEZWidgetText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="1dp"
         android:alpha="0.7"
         android:maxLines="1"
         android:text="@string/memoez_list_widget_preview_line"
