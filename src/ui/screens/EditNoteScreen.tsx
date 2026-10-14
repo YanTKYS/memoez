@@ -41,8 +41,11 @@ interface Props {
    * ウィンドウ自体がシステムバーの外側に配置されるため、上下のセーフエリア余白を付けない。
    */
   presentation?: 'screen' | 'floating';
-  /** ウィンドウ外タップなど、画面の外から「保存して閉じる」を呼ぶための ref */
-  closeRequestRef?: MutableRefObject<(() => void) | null>;
+  /**
+   * ウィンドウ外タップなど、画面の外から「保存して閉じる」を呼ぶための ref。
+   * 閉じたら true、保存に失敗して入力を残したら false で解決する。
+   */
+  closeRequestRef?: MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
 export function EditNoteScreen({
@@ -68,6 +71,8 @@ export function EditNoteScreen({
     lastSavedAt,
     snackMsg,
     setSnackMsg,
+    saveError,
+    discardChangesAndExit,
     form,
     setTitle,
     setContent,
@@ -318,6 +323,16 @@ export function EditNoteScreen({
         duration={2000}
       >
         {snackMsg}
+      </Snackbar>
+
+      {/* 保存に失敗した間は消さない。閉じる操作は保存できるまで行わない（再度閉じると再試行） */}
+      <Snackbar
+        visible={saveError}
+        onDismiss={() => {}}
+        duration={Number.POSITIVE_INFINITY}
+        action={{ label: '破棄して閉じる', onPress: discardChangesAndExit }}
+      >
+        保存できませんでした。入力内容は残っています
       </Snackbar>
     </SafeAreaView>
   );

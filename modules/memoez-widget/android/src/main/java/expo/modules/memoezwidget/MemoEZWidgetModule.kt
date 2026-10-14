@@ -57,6 +57,16 @@ class MemoEZWidgetModule : Module() {
       }
     }
 
+    /** 閉じる依頼を受け取った（保存を始める）。応答なしとみなす時間切れを取り消す */
+    Function("acknowledgeCloseRequest") {
+      MemoEZWindowActivity.acknowledgeCloseRequests()
+    }
+
+    /** 閉じる依頼に対し、保存に失敗したため閉じられないことを伝える（ウィンドウを残す） */
+    Function("keepWindowOpen") {
+      MemoEZWindowActivity.keepOpenWindows()
+    }
+
     /** ウィジェットから開いたウィンドウを閉じる（ホーム画面に戻る） */
     Function("closeWindow") {
       MemoEZWindowActivity.finishOpenWindows()

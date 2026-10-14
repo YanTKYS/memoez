@@ -13,6 +13,8 @@ interface MemoEZWidgetNativeModule {
   completeConfiguration(appWidgetId: number, noteId: number, snapshotJson: string): Promise<void>;
   closeWindow(): boolean;
   setCloseHandlerActive(active: boolean): void;
+  keepWindowOpen(): void;
+  acknowledgeCloseRequest(): void;
   addListener(eventName: 'onCloseRequested', listener: () => void): Subscription;
 }
 
@@ -34,6 +36,16 @@ export interface WidgetBridge {
   setCloseHandlerActive(active: boolean): void;
   /** ホームボタン・履歴ボタンでウィンドウを離れたとき（保存してから closeWindow() を呼ぶ） */
   addCloseRequestListener(listener: () => void): Subscription;
+  /**
+   * 閉じる依頼を受け取ったことを伝える。ネイティブ側は「JS が応答しない」場合の時間切れを
+   * 取り消し、保存に時間がかかっても結果（closeWindow / keepWindowOpen）を待つ。
+   */
+  acknowledgeCloseRequest(): void;
+  /**
+   * 閉じる依頼に応じられなかった（保存に失敗した）ことを伝える。ネイティブ側は時間切れによる
+   * 破棄を取り消し、入力内容を残したウィンドウに履歴から戻れるようにする。
+   */
+  keepWindowOpen(): void;
 }
 
 const native: MemoEZWidgetNativeModule | null =
@@ -54,6 +66,8 @@ export const widgetBridge: WidgetBridge = {
   },
   closeWindow: () => native?.closeWindow() ?? false,
   setCloseHandlerActive: (active) => { native?.setCloseHandlerActive(active); },
+  keepWindowOpen: () => { native?.keepWindowOpen(); },
+  acknowledgeCloseRequest: () => { native?.acknowledgeCloseRequest(); },
   addCloseRequestListener: (listener) =>
     native?.addListener('onCloseRequested', listener) ?? { remove: () => {} },
 };

@@ -17,16 +17,20 @@ interface Props {
  */
 export function FloatingNoteEditor({ noteId }: Props) {
   // EditNoteScreen の「保存して閉じる」（戻るボタンと同じ処理）
-  const closeRequestRef = useRef<(() => void) | null>(null);
+  const closeRequestRef = useRef<(() => Promise<boolean>) | null>(null);
   const [showLabelManager, setShowLabelManager] = useState(false);
 
   const openLabelManager  = useCallback(() => setShowLabelManager(true),  []);
   const closeLabelManager = useCallback(() => setShowLabelManager(false), []);
 
-  /** EditNoteScreen の「保存して閉じる」（戻るボタン・× と同じ。保存の完了を待つ） */
-  const saveAndClose = useCallback(() => {
-    if (closeRequestRef.current) closeRequestRef.current();
-    else closeWidgetWindow();
+  /**
+   * EditNoteScreen の「保存して閉じる」（戻るボタン・× と同じ。保存の完了を待つ）。
+   * 閉じたら true、保存に失敗して入力を残したら false。
+   */
+  const saveAndClose = useCallback(async (): Promise<boolean> => {
+    if (closeRequestRef.current) return closeRequestRef.current();
+    closeWidgetWindow();
+    return true;
   }, []);
 
   // ホームボタン・履歴ボタンで離れたときも、保存してから閉じる
@@ -36,7 +40,7 @@ export function FloatingNoteEditor({ noteId }: Props) {
     if (showLabelManager) {
       setShowLabelManager(false);
     } else {
-      saveAndClose();
+      void saveAndClose();
     }
   }, [showLabelManager, saveAndClose]);
 

@@ -36,6 +36,8 @@ jest.mock('@/lib/widget/widgetBridge', () => {
       completeConfiguration: async () => {},
       closeWindow: () => { state.log.push('close'); return true; },
       setCloseHandlerActive: (active: boolean) => { state.closeHandlerActive = active; },
+      keepWindowOpen: () => { state.log.push('keep-open'); },
+      acknowledgeCloseRequest: () => { state.log.push('ack'); },
       addCloseRequestListener: (listener: () => void) => {
         state.listener = listener;
         return { remove: () => { state.listener = null; } };
@@ -87,10 +89,33 @@ describe('closing the widget window from the home / recents button', () => {
     await waitFor(() => expect(bridge.mockState.log).toContain('close'));
     expect((await di.mockInner.findById(id))?.content).toBe('ホームボタン直前の入力');
 
-    // 閉じる前に、保存後の内容でウィジェットを更新している
+    // 受領をすぐ返し（ネイティブの時間切れを止める）、保存後の内容でウィジェットを更新してから閉じる
+    expect(bridge.mockState.log[0]).toBe('ack');
     const closeAt = bridge.mockState.log.indexOf('close');
     const snapshotAt = bridge.mockState.log.lastIndexOf('snapshot:ホームボタン直前の入力');
     expect(snapshotAt >= 0 && snapshotAt < closeAt).toBe(true);
+    unmount();
+  });
+
+  it('keeps the window (and the input) when the save fails, instead of letting the timeout close it', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { id, result, unmount } = await openFloatingEditor();
+    jest.spyOn(di.mockInner, 'update').mockImplementationOnce(async () => { throw new Error('disk full'); });
+
+    act(() => result.current.setContent('保存できなかった入力'));
+    act(() => bridge.mockState.listener?.());
+
+    await waitFor(() => expect(bridge.mockState.log).toContain('keep-open'));
+    expect(bridge.mockState.log).not.toContain('close');
+    expect(result.current.form.content).toBe('保存できなかった入力');
+    expect(result.current.saveError).toBe(true);
+
+    // 次に離れたとき（または戻る・×）に再試行し、保存できたら閉じる
+    act(() => bridge.mockState.listener?.());
+    await waitFor(() => expect(bridge.mockState.log).toContain('close'));
+    expect((await di.mockInner.findById(id))?.content).toBe('保存できなかった入力');
+
+    jest.restoreAllMocks();
     unmount();
   });
 

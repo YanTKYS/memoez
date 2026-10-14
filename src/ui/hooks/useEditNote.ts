@@ -29,6 +29,8 @@ export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteO
   const [loadError,   setLoadError]   = useState<string | null>(null);
   const [saving,      setSaving]      = useState(false);
   const [snackMsg,    setSnackMsg]    = useState('');
+  // 直近の保存に失敗し、画面の入力内容がまだ保存されていない
+  const [saveError,   setSaveError]   = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const mountedRef       = useRef(true);
@@ -105,16 +107,19 @@ export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteO
     }, SAVED_FEEDBACK_MS);
   }, []);
 
-  /** 現在のフォーム内容を 1 回だけ永続化する */
-  const persist = useCallback(async (): Promise<void> => {
-    if (closedRef.current) return;
+  /**
+   * 現在のフォーム内容を 1 回だけ永続化する。
+   * 保存できた（または保存するものがない）なら true、保存に失敗したら false。
+   */
+  const persist = useCallback(async (): Promise<boolean> => {
+    if (closedRef.current) return true;
 
     const current = noteRef.current;
     // 空のまま新規作成はしない。既存メモは空にした状態も保存する（本文を消せるように）
-    if (!current && isEmpty()) return;
+    if (!current && isEmpty()) return true;
 
     const snapshot = noteFormSnapshot(form);
-    if (snapshot === savedSnapshotRef.current) return; // 変更なし
+    if (snapshot === savedSnapshotRef.current) return true; // 変更なし
 
     if (mountedRef.current) setSaving(true);
     try {
@@ -142,10 +147,13 @@ export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteO
 
       savedSnapshotRef.current = snapshot;
       placeholderRef.current   = false;
+      if (mountedRef.current) setSaveError(false);
       showSavedFeedback();
+      return true;
     } catch (e) {
       console.error('saveNote error:', e);
-      if (mountedRef.current) setSnackMsg('保存に失敗しました');
+      if (mountedRef.current) setSaveError(true);
+      return false;
     } finally {
       if (mountedRef.current) setSaving(false);
     }
@@ -154,11 +162,11 @@ export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteO
   /**
    * 保存を 1 本のチェーンに直列化する。
    * 「保存中に来た変更の取りこぼし」も「同じメモの二重作成」もこれで防げる。
-   * 戻り値を await すれば、その時点のフォーム内容が確実に書き込まれている。
+   * 戻り値（true = 保存済み）を await すれば、その時点のフォーム内容が書き込まれたかが分かる。
    */
-  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
-  const saveNote = useCallback((): Promise<void> => {
+  const saveNote = useCallback((): Promise<boolean> => {
     const next = saveChainRef.current.then(persist);
     saveChainRef.current = next.catch(() => {});
     return next;
@@ -227,8 +235,12 @@ export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteO
   }), []);
 
   // ─── 保存して戻る（stableBack 経由で BackHandler に渡す） ────────────────
-  const handleBack = useCallback(async () => {
-    if (leavingRef.current) return; // 保存を待っている間の連打を無視する
+  /**
+   * 保存が完了してから画面を閉じる。閉じたら true。
+   * 保存に失敗した場合は閉じずに入力内容を残し（saveError で通知）、false を返す。
+   */
+  const handleBack = useCallback(async (): Promise<boolean> => {
+    if (leavingRef.current) return false; // 保存を待っている間の連打を無視する
     leavingRef.current = true;
 
     const current = noteRef.current;
@@ -241,17 +253,27 @@ export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteO
         console.error('discard placeholder note error:', e);
       }
     } else {
-      await saveNote();
+      if (!(await saveNote())) {
+        // 保存できていない内容を捨てて閉じない（もう一度閉じれば再試行する）
+        leavingRef.current = false;
+        return false;
+      }
       closedRef.current = true;
     }
     onExitRef.current();
+    return true;
   }, [isEmpty, saveNote]);
 
   const handleBackRef = useRef(handleBack);
   handleBackRef.current = handleBack;
 
-  const stableHandleBack = useCallback(() => {
-    handleBackRef.current();
+  const stableHandleBack = useCallback((): Promise<boolean> => handleBackRef.current(), []);
+
+  /** 保存に失敗し続ける場合の逃げ道。未保存の変更を捨てて閉じる（利用者が明示的に選んだときだけ） */
+  const discardChangesAndExit = useCallback(() => {
+    closedRef.current = true;
+    setSaveError(false);
+    onExitRef.current();
   }, []);
 
   // ─── 削除 ────────────────────────────────────────────────────────────────
@@ -312,8 +334,10 @@ export function useEditNote(noteId: number | undefined, { onExit }: UseEditNoteO
     lastSavedAt,
     snackMsg,
     setSnackMsg,
+    saveError,
     ...noteForm,
     handleBack:          stableHandleBack,
+    discardChangesAndExit,
     handleDelete,
     handlePin,
     prepareForLabels,

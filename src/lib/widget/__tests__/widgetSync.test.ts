@@ -15,6 +15,8 @@ function fakeBridge(boundNoteIds: number[], available = true) {
     completeConfiguration: async () => {},
     closeWindow: () => true,
     setCloseHandlerActive: () => {},
+    keepWindowOpen: () => {},
+    acknowledgeCloseRequest: () => {},
     addCloseRequestListener: () => ({ remove: () => {} }),
   };
   return { bridge, sent };

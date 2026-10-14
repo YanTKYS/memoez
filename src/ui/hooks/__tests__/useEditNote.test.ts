@@ -76,6 +76,52 @@ describe('useEditNote', () => {
     await waitFor(async () => expect((await di.mockInner.findById(id))?.content).toBe('閉じる直前の入力'));
   });
 
+  it('does not close when the save fails, keeps the input, and closes after a successful retry', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { id, result, onExit, unmount } = await openEditor('タイトル');
+    jest.spyOn(di.mockInner, 'update').mockImplementationOnce(async () => { throw new Error('disk full'); });
+
+    act(() => result.current.setContent('失いたくない入力'));
+    let closed: boolean | undefined;
+    await act(async () => { closed = await result.current.handleBack(); });
+
+    expect(closed).toBe(false);
+    expect(onExit).not.toHaveBeenCalled();
+    expect(result.current.form.content).toBe('失いたくない入力');
+    expect(result.current.saveError).toBe(true);
+    expect((await di.mockInner.findById(id))?.content).toBe('body');
+
+    // もう一度閉じると保存を再試行し、成功したら閉じる
+    await act(async () => { closed = await result.current.handleBack(); });
+    expect(closed).toBe(true);
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(result.current.saveError).toBe(false);
+    expect((await di.mockInner.findById(id))?.content).toBe('失いたくない入力');
+
+    expect(errorSpy).toHaveBeenCalled();
+    jest.restoreAllMocks();
+    unmount();
+  });
+
+  it('lets the user explicitly discard unsaved changes when saving keeps failing', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { id, result, onExit, unmount } = await openEditor('タイトル');
+    jest.spyOn(di.mockInner, 'update').mockImplementation(async () => { throw new Error('disk full'); });
+
+    act(() => result.current.setContent('保存できない入力'));
+    await act(async () => { await result.current.handleBack(); });
+    expect(onExit).not.toHaveBeenCalled();
+
+    act(() => result.current.discardChangesAndExit());
+    expect(onExit).toHaveBeenCalledTimes(1);
+
+    jest.restoreAllMocks();
+    unmount();
+    await settle();
+    // 破棄を選んだので、閉じた後に古い入力で上書きしない
+    expect((await di.mockInner.findById(id))?.content).toBe('body');
+  });
+
   it('closes only after the pending save has been written', async () => {
     const { id, result, onExit, unmount } = await openEditor('タイトル');
 

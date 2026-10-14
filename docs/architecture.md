@@ -204,7 +204,8 @@ exportBackupJson (domain/usecases/backupJson.ts)  ──►  JSON
 
 - ウィンドウ用 Activity は Expo SDK 52 の MainActivity と同じく、デリゲートを `expo.modules.ReactActivityDelegateWrapper` で包み、Expo Modules（ReactActivityLifecycleListener / Handler）へライフサイクルを通知する。ラッパーは全 Expo モジュールに依存する `expo` パッケージにあり、ローカルモジュールからは依存が循環して参照できないため、config plugin がアプリ側にサブクラスを生成する（本体は `FloatingEditorActivityBase` / `WidgetConfigActivityBase`）。
 - ウィジェットから開く Intent には data（URI）を付けない。expo-linking のライフサイクル通知がディープリンクとして扱い、同じ JS ランタイムの通常画面（Expo Router）に届くのを避けるため。
-- ホーム・履歴ボタンで離れたとき（`onUserLeaveHint`）、編集中なら即座に破棄せず JS に `onCloseRequested` を送る。JS は戻る・× と同じ処理（保存完了 → ウィジェット同期 → `closeWindow()`）で閉じる。応答がなければ 5 秒後に閉じる。メモ選択・読み込み中など保存するものがない場合はそのまま閉じる。保存待ちの間に MemoEZ 本体が前面に来ても本体を閉じないよう、`closeWindow()` は開いているウィンドウ自身を記録して閉じる。
+- ホーム・履歴ボタンで離れたとき（`onUserLeaveHint`）、編集中なら即座に破棄せず JS に `onCloseRequested` を送る。JS はすぐ受領（`acknowledgeCloseRequest`）を返し、戻る・× と同じ処理（保存完了 → ウィジェット同期 → `closeWindow()`）で閉じる。受領が 5 秒以内に来なければ（JS 無応答）閉じる。受領後は保存に時間がかかっても待つ。
+- 閉じる前の保存に失敗したら閉じない（戻る・× でも同じ）。入力内容は画面に残し、「保存できませんでした」を表示し続ける。もう一度閉じると再試行し、利用者が「破棄して閉じる」を選んだときだけ未保存の変更を捨てる。ホームボタン経由で失敗した場合は `keepWindowOpen` でウィンドウを残し、履歴（最近使ったアプリ）から戻れるようにする（閉じるときはタスクごと履歴から消す）。メモ選択・読み込み中など保存するものがない場合はそのまま閉じる。保存待ちの間に MemoEZ 本体が前面に来ても本体を閉じないよう、`closeWindow()` は開いているウィンドウ自身を記録して閉じる。
 - Android（旧アーキテクチャ）ではアプリがバックグラウンドの間 JS のタイマーが止まるため、閉じる直前のウィジェット同期はタイマーを使わずに完了させてから閉じる（`exitWidgetWindow`）。
 
 - ウィンドウ用 Activity は `taskAffinity="${applicationId}.widget"`・`excludeFromRecents`。MemoEZ 本体のタスクを前面に出さないため、背後はホーム画面のまま。ウィジェットからは `NEW_TASK | CLEAR_TASK` で開き、前回のウィンドウが残っていれば置き換える。
