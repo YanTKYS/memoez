@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, type MutableRefObject } from 'react';
 import {
   View,
   ScrollView,
@@ -19,7 +19,6 @@ import {
   Snackbar,
   useTheme,
 } from 'react-native-paper';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/ui/components/common/EmptyState';
 import { ChecklistView } from '@/ui/components/EditNote/ChecklistView';
@@ -33,10 +32,30 @@ import { formatDueDateTime, formatRelativeTime } from '@/lib/dateUtils';
 
 interface Props {
   noteId?: number;
+  /** 保存完了後に画面を閉じる（通常画面では router.back()） */
+  onExit: () => void;
+  /** ラベル管理画面を開く */
+  onOpenLabelManager: () => void;
+  /**
+   * 'floating': ホーム画面ウィジェットから開くフローティングウィンドウ内に表示する。
+   * ウィンドウ自体がシステムバーの外側に配置されるため、上下のセーフエリア余白を付けない。
+   */
+  presentation?: 'screen' | 'floating';
+  /**
+   * ウィンドウ外タップなど、画面の外から「保存して閉じる」を呼ぶための ref。
+   * 閉じたら true、保存に失敗して入力を残したら false で解決する。
+   */
+  closeRequestRef?: MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
-export function EditNoteScreen({ noteId }: Props) {
-  const router = useRouter();
+export function EditNoteScreen({
+  noteId,
+  onExit,
+  onOpenLabelManager,
+  presentation = 'screen',
+  closeRequestRef,
+}: Props) {
+  const isFloating = presentation === 'floating';
   const [showColor,    setShowColor]    = useState(false);
   const [showLabels,   setShowLabels]   = useState(false);
   const [showDueModal, setShowDueModal] = useState(false);
@@ -52,6 +71,8 @@ export function EditNoteScreen({ noteId }: Props) {
     lastSavedAt,
     snackMsg,
     setSnackMsg,
+    saveError,
+    discardChangesAndExit,
     form,
     setTitle,
     setContent,
@@ -69,7 +90,7 @@ export function EditNoteScreen({ noteId }: Props) {
     prepareForLabels,
     fetchLabels,
     toggleNoteLabel,
-  } = useEditNote(noteId);
+  } = useEditNote(noteId, { onExit });
 
   // ─── Android ハードウェアバックボタン ─────────────────────────────────
   // handleBack が保存の完了を待ってから戻るので、保存中でも押せるようにしておく
@@ -81,6 +102,12 @@ export function EditNoteScreen({ noteId }: Props) {
     });
     return () => sub.remove();
   }, [handleBack]);
+
+  useEffect(() => {
+    if (!closeRequestRef) return;
+    closeRequestRef.current = handleBack;
+    return () => { closeRequestRef.current = null; };
+  }, [closeRequestRef, handleBack]);
 
   // ─── タイプ切り替え（本文がある場合は確認） ──────────────────────────
   const handleTypeChange = useCallback(() => {
@@ -125,11 +152,17 @@ export function EditNoteScreen({ noteId }: Props) {
     );
   }
 
+  // フローティング表示ではウィンドウの外側がシステムバーに接するため、余白は不要
+  const appbarStatusBarHeight = isFloating ? 0 : undefined;
+  const closeAction = isFloating
+    ? <Appbar.Action icon="close" accessibilityLabel="閉じる" onPress={handleBack} />
+    : <Appbar.BackAction onPress={handleBack} />;
+
   if (loadError) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Appbar.Header elevated={false}>
-          <Appbar.BackAction onPress={handleBack} />
+      <SafeAreaView style={styles.container} edges={isFloating ? [] : ['top']}>
+        <Appbar.Header elevated={false} statusBarHeight={appbarStatusBarHeight}>
+          {closeAction}
         </Appbar.Header>
         <EmptyState
           icon="alert-circle-outline"
@@ -142,7 +175,10 @@ export function EditNoteScreen({ noteId }: Props) {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]} edges={['top', 'bottom']}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: bgColor }]}
+      edges={isFloating ? [] : ['top', 'bottom']}
+    >
       {/*
         Android: behavior を指定しない（undefined）ことで高さが縮まらず自然なスクロール動作になる。
         softwareKeyboardLayoutMode: "pan" を app.json に設定済み。
@@ -152,8 +188,12 @@ export function EditNoteScreen({ noteId }: Props) {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Appbar.Header style={{ backgroundColor: bgColor }} elevated={false}>
-          <Appbar.BackAction onPress={handleBack} />
+        <Appbar.Header
+          style={{ backgroundColor: bgColor }}
+          elevated={false}
+          statusBarHeight={appbarStatusBarHeight}
+        >
+          {closeAction}
           <Appbar.Content title="" />
           <Appbar.Action
             icon={note?.isPinned ? 'pin' : 'pin-outline'}
@@ -272,7 +312,7 @@ export function EditNoteScreen({ noteId }: Props) {
           onToggleLabel={toggleNoteLabel}
           onOpenLabelManager={() => {
             setShowLabels(false);
-            router.push('/labels');
+            onOpenLabelManager();
           }}
         />
       )}
@@ -283,6 +323,16 @@ export function EditNoteScreen({ noteId }: Props) {
         duration={2000}
       >
         {snackMsg}
+      </Snackbar>
+
+      {/* 保存に失敗した間は消さない。閉じる操作は保存できるまで行わない（再度閉じると再試行） */}
+      <Snackbar
+        visible={saveError}
+        onDismiss={() => {}}
+        duration={Number.POSITIVE_INFINITY}
+        action={{ label: '破棄して閉じる', onPress: discardChangesAndExit }}
+      >
+        保存できませんでした。入力内容は残っています
       </Snackbar>
     </SafeAreaView>
   );

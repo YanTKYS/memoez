@@ -20,6 +20,7 @@ interface JestMatchers {
   toMatch(expected: string | RegExp): void;
   toHaveBeenCalled(): void;
   toHaveBeenCalledWith(...args: unknown[]): void;
+  toHaveBeenCalledTimes(expected: number): void;
 }
 
 interface JestAsyncMatchers {
@@ -44,9 +45,15 @@ declare namespace jest {
     mockResolvedValueOnce(value: unknown): Mock<R, A>;
     mockRejectedValueOnce(value: unknown): Mock<R, A>;
     mockImplementation(fn: (...args: A) => R): Mock<R, A>;
+    mockImplementationOnce(fn: (...args: A) => R): Mock<R, A>;
+    mockReturnValue(value: R): Mock<R, A>;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function fn<R = any, A extends any[] = any[]>(impl?: (...args: A) => R): Mock<R, A>;
   function spyOn(target: object, method: string): Mock;
   function restoreAllMocks(): void;
+  function mock(moduleName: string, factory?: () => unknown): void;
+  function useFakeTimers(): void;
+  function useRealTimers(): void;
+  function advanceTimersByTime(ms: number): void;
 }

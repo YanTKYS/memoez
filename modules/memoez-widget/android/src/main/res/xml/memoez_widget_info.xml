@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  付箋ウィジェットの定義。
+  - 配置時に WidgetConfigActivity で表示するメモを選ぶ（reconfigure で後から変更も可能）
+  - 表示内容はアプリ側の保存時に更新するため、定期更新（updatePeriodMillis）は使わない
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="expo.modules.memoezwidget.host.WidgetConfigActivity"
+    android:description="@string/memoez_widget_description"
+    android:initialLayout="@layout/memoez_widget_note"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="70dp"
+    android:minResizeHeight="50dp"
+    android:previewLayout="@layout/memoez_widget_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

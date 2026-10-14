@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Note } from '@/domain/entities/Note';
 import { getNoteRepository } from '@/lib/di';
+import { subscribeNotesChanged } from '@/lib/noteChangeEvents';
 import { sortNotesByDueThenUpdated } from './noteDueSort';
 
 interface UseNotesState {
@@ -35,6 +36,15 @@ export function useNotes(archived = false): UseNotesState {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // ウィジェットのフローティングエディタなど、一覧の外で変更されたときは
+  // 画面を作り直さずに静かに読み直す（ローディング表示は出さない）
+  useEffect(() => subscribeNotesChanged(() => {
+    getNoteRepository()
+      .findAll({ archived })
+      .then(setLoaded)
+      .catch((e) => console.error('reload notes error:', e));
+  }), [archived]);
 
   // 表示順の決定はここに一本化する（画面側で並べ替え直さない）
   const pinnedNotes  = useMemo(() => sortNotesByDueThenUpdated(loaded.filter((n) => n.isPinned)),  [loaded]);

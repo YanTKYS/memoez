@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      ウィジェットから開くウィンドウのテーマ。
+      windowIsTranslucent により、背後のホーム画面をそのまま表示する
+      （SYSTEM_ALERT_WINDOW などのオーバーレイ権限は使わない）。
+      ウィンドウ自体は全画面で、付箋カード（余白付き）は React Native 側で描画する。
+    -->
+    <style name="Theme.MemoEZ.Floating" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <!-- 起動直後（JS 読み込み中）からタップしたことが分かるよう、背後を軽く暗くする -->
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.32</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <!-- 以下は通常画面の AppTheme と揃える（React Native の TextInput の見た目） -->
+        <item name="android:editTextStyle">@style/MemoEZ.Floating.ResetEditText</item>
+        <item name="android:editTextBackground">@drawable/memoez_floating_edit_text</item>
+        <item name="colorPrimary">#FFA000</item>
+        <item name="colorAccent">#FFA000</item>
+    </style>
+
+    <style name="MemoEZ.Floating.ResetEditText" parent="@android:style/Widget.EditText">
+        <item name="android:padding">0dp</item>
+        <item name="android:textColorHint">#c8c8c8</item>
+        <item name="android:textColor">@android:color/black</item>
+    </style>
+
+    <style name="MemoEZWidgetText">
+        <item name="android:textColor">#DE1C1B1F</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+</resources>

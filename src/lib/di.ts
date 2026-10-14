@@ -6,13 +6,20 @@
 import { getDb } from '@/data/db/client';
 import { DrizzleNoteRepository } from '@/data/repositories/DrizzleNoteRepository';
 import { DrizzleLabelRepository } from '@/data/repositories/DrizzleLabelRepository';
+import { ChangeNotifyingNoteRepository } from '@/data/repositories/ChangeNotifyingNoteRepository';
+import type { INoteRepository } from '@/domain/repositories/INoteRepository';
+import { notifyNotesChanged } from '@/lib/noteChangeEvents';
 import { GoogleDriveBackupStore } from '@/data/backup/GoogleDriveBackupStore';
 import type { IRemoteBackupStore } from '@/domain/backup/IRemoteBackupStore';
 import { DriveClient } from '@/lib/googleDrive/driveClient';
 import { getDriveAccessToken, invalidateAccessToken } from '@/lib/googleDrive/googleAuth';
 
-export function getNoteRepository(): DrizzleNoteRepository {
-  return new DrizzleNoteRepository(getDb());
+/**
+ * 書き込みのたびに変更通知（noteChangeEvents）を出す。
+ * 通常画面・フローティングエディタ・ウィジェット表示の同期はこの通知に依存する。
+ */
+export function getNoteRepository(): INoteRepository {
+  return new ChangeNotifyingNoteRepository(new DrizzleNoteRepository(getDb()), notifyNotesChanged);
 }
 
 export function getLabelRepository(): DrizzleLabelRepository {

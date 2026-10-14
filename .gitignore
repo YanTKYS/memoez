@@ -11,5 +11,6 @@ web-build/
 web-build/
 .env
 .env.local
-android/
-ios/
+# expo prebuild が生成するネイティブプロジェクト（ルートのみ。modules/*/android はソース管理する）
+/android/
+/ios/

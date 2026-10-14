@@ -1,0 +1,30 @@
+// MemoEZ ホーム画面ウィジェット（ローカル Expo モジュール）
+//
+// modules/ 配下のローカルモジュールは expo-modules-autolinking が自動で取り込むため、
+// `expo prebuild --clean` で android/ を作り直してもこのコードは失われない。
+// AppWidgetProvider・Activity・リソースはこのライブラリの AndroidManifest.xml / res から
+// アプリ側へマージされる。
+apply plugin: 'com.android.library'
+
+group = 'com.memoez.widget'
+version = '0.4.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "expo.modules.memoezwidget"
+  defaultConfig {
+    versionCode 1
+    versionName "0.4.0"
+  }
+}
+
+dependencies {
+  // フローティングエディタは ReactActivity（AppCompatActivity）を継承する
+  implementation 'com.facebook.react:react-android'
+  implementation 'androidx.appcompat:appcompat:1.6.1'
+}

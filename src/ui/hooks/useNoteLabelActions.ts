@@ -9,7 +9,7 @@ type Params = {
   setNote: (note: Note | null) => void;
   mountedRef: MutableRefObject<boolean>;
   isEmpty: () => boolean;
-  saveNote: () => Promise<void>;
+  saveNote: () => Promise<unknown>;
   formType: NoteType;
   formColor: NoteColor;
   /** ラベル付与のために空メモを自動生成したことを呼び出し元へ通知する */
