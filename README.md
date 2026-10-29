@@ -174,6 +174,7 @@ memoez/
 | ファイル | 内容 |
 |---------|------|
 | [docs/architecture.md](docs/architecture.md) | アーキテクチャ概要・レイヤー設計・DI・データフロー |
+| [docs/app-icon.md](docs/app-icon.md) | アプリアイコンの SVG 元データ・PNG 再生成・Android 表示確認 |
 | [docs/database.md](docs/database.md) | DB設計・テーブル定義・マイグレーション方針 |
 | [docs/google-drive-setup.md](docs/google-drive-setup.md) | 開発者向け Google Drive 連携設定（Cloud Console・Client ID・SHA-1・CI） |
 | [docs/ci-cd.md](docs/ci-cd.md) | CI/CD ワークフロー・署名設定手順 |
