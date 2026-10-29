@@ -117,25 +117,15 @@ def push_context(sha):
     return event
 
 
-def reviewed(pr, reviews):
-    latest = {}
-    for review in sorted(reviews, key=lambda item: item['id']):
-        if review['state'] != 'COMMENTED':
-            latest[review['user']['login']] = review
-    require(not any(r['state'] == 'CHANGES_REQUESTED' for r in latest.values()), 'Unresolved change request')
-    require(any(r['state'] == 'APPROVED' and r['commit_id'] == pr['head']['sha'] and r['user']['login'] != pr['user']['login'] and r['user'].get('type') in ('User', 'Bot') for r in latest.values()), 'Current PR head requires an independent, non-dismissed approval')
-
-
-def approval(sha, branch, pr, environment, policies, event, commit, reviews, comparison=None):
+def approval(sha, branch, pr, environment, policies, event, commit, comparison=None):
     require(sha == event['after'] == branch['commit']['sha'], 'Release SHA must be the current main HEAD')
     require(branch['protected'], 'Protect main before enabling releases')
     require(pr.get('merged_at') and pr.get('merge_commit_sha') == sha and (pr.get('merged_by') or {}).get('login') == OWNER and pr['base']['ref'] == 'main' and pr['base']['repo']['full_name'] == REPO, 'Owner-merged main PR required')
     require(not pr.get('draft') and pr.get('state') == 'closed', 'Merged non-draft PR required')
-    reviewed(pr, reviews)
     require(commit['sha'] == sha, 'Commit lookup mismatch')
     parents = [p['sha'] for p in commit['parents']]
     if len(parents) == 2:
-        require(parents == [event['before'], pr['head']['sha']], 'Merge parents do not match push and reviewed PR head')
+        require(parents == [event['before'], pr['head']['sha']], 'Merge parents do not match push and source PR head')
     elif len(parents) == 1 and parents[0] == event['before']:
         # GitHub merge_commit_sha is the squash commit, or the tip of a one-commit rebase.
         pass
@@ -150,7 +140,7 @@ def approval(sha, branch, pr, environment, policies, event, commit, reviews, com
             previous = item['sha']
         require(previous == sha, 'Rebase range tip differs from approved merge')
         pairs = comparison.get('patch_ids', [])
-        require(len(pairs) == len(commits) and all(re.fullmatch(r'[0-9a-f]{40}', original) and original == rebased for original, rebased in pairs), 'Rebased patches differ from reviewed PR commits')
+        require(len(pairs) == len(commits) and all(re.fullmatch(r'[0-9a-f]{40}', original) and original == rebased for original, rebased in pairs), 'Rebased patches differ from source PR commits')
     require(environment.get('deployment_branch_policy', {}).get('custom_branch_policies'), 'Environment must restrict deployment branches')
     require(policies == [{'name': 'main', 'type': 'branch'}], 'Environment must allow only main (no tags or wildcard branches)')
     require(not any(r['type'] == 'required_reviewers' and r.get('reviewers') for r in environment['protection_rules']), 'Remove per-release Environment reviewers; owner PR merge is the approval')
@@ -183,7 +173,7 @@ def check_remote_approval(sha):
     policy_result = api(f'environments/{ENVIRONMENT}/deployment-branch-policies')
     require(policy_result['total_count'] == 1, 'Exactly one Environment deployment branch policy required')
     policies = [{'name': p['name'], 'type': p['type']} for p in policy_result['branch_policies']]
-    approval(sha, branch, pr, env, policies, event, commit, pages(f'pulls/{pr["number"]}/reviews'), comparison)
+    approval(sha, branch, pr, env, policies, event, commit, comparison)
 
 
 def latest_metadata(releases):

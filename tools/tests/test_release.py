@@ -28,8 +28,7 @@ def approval_args():
             {'deployment_branch_policy': {'custom_branch_policies': True}, 'protection_rules': []},
             [{'name': 'main', 'type': 'branch'}],
             {'after': SHA, 'before': BEFORE},
-            {'sha': SHA, 'parents': [{'sha': BEFORE}, {'sha': HEAD}]},
-            [{'id': 1, 'state': 'APPROVED', 'commit_id': HEAD, 'user': {'login': 'reviewer', 'type': 'User'}}]]
+            {'sha': SHA, 'parents': [{'sha': BEFORE}, {'sha': HEAD}]}]
 
 
 class ReleaseGuards(unittest.TestCase):
@@ -130,17 +129,17 @@ class ReleaseGuards(unittest.TestCase):
             with self.subTest(parents=parents), self.assertRaises(ValueError):
                 r.approval(*args)
 
-    def test_review_must_cover_current_head_and_not_be_dismissed(self):
-        for reviews in [[], [{**approval_args()[7][0], 'state': 'DISMISSED'}], [{**approval_args()[7][0], 'commit_id': BEFORE}], [{**approval_args()[7][0], 'user': {'login': 'author', 'type': 'User'}}], [{**approval_args()[7][0], 'user': {'login': 'org', 'type': 'Organization'}}], approval_args()[7] + [{**approval_args()[7][0], 'id': 2, 'state': 'CHANGES_REQUESTED'}]]:
-            args = approval_args()
-            args[7] = reviews
-            with self.subTest(reviews=reviews), self.assertRaises(ValueError):
-                r.approval(*args)
+    def test_owner_merge_accepts_author_own_pr_without_independent_approval(self):
         args = approval_args()
-        args[7].append({**args[7][0], 'id': 2, 'state': 'COMMENTED'})
-        r.approval(*args)  # Discussion does not erase a valid approval.
-        args[7] = [{**args[7][0], 'user': {'login': 'review-app[bot]', 'type': 'Bot'}}]
-        r.approval(*args)  # A submitted app approval is allowed; a bot merge is not.
+        args[2]['user']['login'] = 'YanTKYS'
+        # ChatGPT's review may be a conversation/comment, not a GitHub Review event.
+        # Approval is the API-confirmed owner merge, even with zero formal reviews.
+        r.approval(*args)
+        args[6]['parents'] = [{'sha': BEFORE}]
+        r.approval(*args)  # Squash of owner's own PR is also accepted.
+        args[1]['protected'] = False
+        with self.assertRaises(ValueError):
+            r.approval(*args)  # No bypass for an unprotected main.
 
     def test_environment_requires_main_only_without_extra_reviewers(self):
         for policies in [[], [{'name': '*', 'type': 'branch'}], [{'name': 'main', 'type': 'tag'}], [{'name': 'main', 'type': 'branch'}, {'name': 'test', 'type': 'branch'}]]:
@@ -319,13 +318,15 @@ class ReleaseGuards(unittest.TestCase):
                 with patch.object(r, 'ROOT', root), patch.dict(os.environ, {'MEMOEZ_RELEASE_ENABLED': 'true', 'GITHUB_SHA': SHA, 'MEMOEZ_RELEASE_CERT_SHA256': '' if missing == 'certificate' else CERT}), patch.object(r, 'push_context'), patch.object(r, 'command', return_value=SHA), patch.object(r, 'pages', side_effect=[[], []]), patch.object(r, 'check_remote_approval'), self.assertRaises(ValueError):
                     r.make_plan()
 
-    def test_api_evidence_resolves_full_pr_and_current_head_reviews(self):
+    def test_api_evidence_resolves_owner_merge_without_review_endpoint(self):
         args = approval_args()
+        args[2]['user']['login'] = 'YanTKYS'
         def remote(path):
             return {'branches/main': args[1], 'pulls/1': args[2], 'git/commits/' + SHA: args[6], 'environments/release-signing': args[3], 'environments/release-signing/deployment-branch-policies': {'total_count': 1, 'branch_policies': args[4]}}[path]
-        with patch.object(r, 'push_context', return_value=args[5]), patch.object(r, 'api', side_effect=remote) as api, patch.object(r, 'pages', side_effect=[[{'number': 1}], args[7]]):
+        with patch.object(r, 'push_context', return_value=args[5]), patch.object(r, 'api', side_effect=remote) as api, patch.object(r, 'pages', side_effect=[[{'number': 1}]]):
             r.check_remote_approval(SHA)
             self.assertTrue(any(call.args == ('pulls/1',) for call in api.call_args_list))
+            self.assertFalse(any('/reviews' in call.args[0] for call in api.call_args_list))
         with patch.object(r, 'push_context', return_value=args[5]), patch.object(r, 'api', side_effect=remote), patch.object(r, 'pages', return_value=[]), self.assertRaises(ValueError):
             r.check_remote_approval(SHA)  # No associated merged PR = direct push, never release.
 
