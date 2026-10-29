@@ -45,7 +45,7 @@
 - [ ] タグ作成: `v0.1.4-beta`
 - [ ] `Release Signed APK` ワークフローが成功
 - [ ] GitHub Release に APK が添付されている
-- [ ] `PR Auto Merge and Delete Branch` が有効で、競合なしPRが自動マージされる
+- 対象外（Issue #81 で廃止）：旧 `PR Auto Merge and Delete Branch` の動作確認。現在はレビュー・CI 確認後にオーナーが手動マージする。
 
 ## 5. リリースノート
 - [x] 主要変更点を 3–7項目で整理

@@ -122,6 +122,8 @@ PR／main push では、署名 Secrets を使わずテストと debug APK をビ
 
 ## リリース手順
 
+AI が Issue を実装して PR を作成し、ChatGPT のレビューと CI 結果をオーナーが確認して、本人が main へ手動マージします。PR の自動マージ Workflow は使用しません。ブランチ削除には GitHub 標準の `Settings → General → Pull Requests → Automatically delete head branches` を必要に応じて利用できます（設定はオーナーが行います）。
+
 正式鍵を安全な PC で一度だけ作成・バックアップし、GitHub の署名 Environment と main 保護をオーナーが設定します。新版・確定済みノート・実機確認を揃え、レビュー済み PR をオーナーが main にマージすると、新版だけ自動で正式公開します。同じ版の通常 PR は skip になり、毎回のタグ／SHA 入力や Environment 追加承認は不要です。初回設定完了までは公開を無効に保ちます。
 
 詳しくは [署名・安全な公開・旧 debug 版からの移行](docs/releasing.md) と [CI](docs/ci-cd.md) を参照してください。**署名が異なる APK への切替前に、JSON／Google Drive のバックアップと復元を確認してください。バックアップなしのアンインストールは行わないでください。**

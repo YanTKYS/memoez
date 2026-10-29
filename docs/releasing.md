@@ -45,7 +45,7 @@ Environment Secrets がなくても通常 PR/main CI は動く。署名ステッ
 ## 通常の自動公開
 
 1. リリース PR に app.json／package.json の新しい安定版、増加した versionCode、`docs/release-note.md` の**ドラフトではない** `## vX.Y.Z` 節と `### Title`（`vX.Y.Z:` 開始）／`### Note`、実機検証記録を揃える。既存の過去ノートは消さない。
-2. ChatGPT がチャット／PR コメントでレビューし、オーナー **YanTKYS** が内容と CI を確認して保護された main へ PR をマージする。API で確認できるこのオーナーマージが公開の最終承認であり、別アカウントの GitHub APPROVED は不要。自分で作成した PR も同じ条件で扱う。既存の自動マージ処理にリリース PR を渡さない（必要なら一度だけオーナーがその Workflow を停止）。bot 等のマージからは正式公開しない。
+2. ChatGPT がチャット／PR コメントでレビューし、オーナー **YanTKYS** が内容と CI を確認して保護された main へ PR を手動マージする。API で確認できるこのオーナーマージが公開の最終承認であり、別アカウントの GitHub APPROVED は不要。自分で作成した PR も同じ条件で扱う。PR 自動マージ Workflow は廃止しており、毎回の Actions 停止は不要。bot 等のマージからは正式公開しない。初回公開の PR #80 より先に Issue #81 の削除 PR を取り込む順序は [CI の移行手順](ci-cd.md#pr-のレビューとマージ)を参照。
 3. main push で Workflow を自動起動。秘密鍵なしの軽量 plan が app.json／package.json と既存の正式版を照合する。同じ versionName／versionCode は `skip` で正常終了し、SDK 導入・release ビルド・署名・公開ジョブを実行しない。初回の公開無効フラグも `skip`。基盤導入 PR #76（v0.5.0/code8）のマージは skip。以後、増加した安定版の PR が初回公開候補となる。公開無効の間は版を上げても署名・公開しない。
 4. 新版は、main が保護されていること、起動 SHA が現在の main HEAD と一致すること、GitHub API が示す PR の merge_commit_sha／merged_by／base と before-after を検証する。正式な Review が0件でも正当なオーナーマージなら受け付ける。チャット／コメントを APPROVED に読み替えたり、その文面を自動判定したりはしない。PR／tag／手動イベント、main の作成・削除・強制 push、直接 push は公開根拠にせず、bot・非オーナーのマージも拒否する。
 5. merge は親が `[push.before, PR.head.sha]` と一致すること、squash／単一コミット rebase は1親が push.before であることを検証する。GitHub API の merge_commit_sha はそれぞれ merge commit／squash commit／rebase 後の最終 commit を指す。複数コミット rebase は before→after の完全な1親チェーン・PR のコミット数・元 PR head を照合し、元の各変更と rebased commit の `git patch-id --stable` の一致も検証する。250件超、欠けた API 応答、空または取得不能な diff は拒否する。証跡を確かめられない場合は merge／squash を使う。
