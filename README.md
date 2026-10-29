@@ -115,30 +115,15 @@ cd android
 
 生成物: `android/app/build/outputs/apk/release/app-release-unsigned.apk`
 
-### CI 経由のビルド（GitHub Actions）
+### CI 経由のビルド・正式配布
 
-- **PR / main へのプッシュ**: デバッグ APK が自動でビルドされ、Actions の Artifacts に 14 日間保存されます。
-- **`v*` タグのプッシュ**: 署名済みリリース APK がビルドされ、GitHub Release に添付されます。
-
-詳細は [docs/ci-cd.md](docs/ci-cd.md) を参照してください。
+PR／main push では、署名 Secrets を使わずテストと debug APK をビルドします。正式配布は別の保護された Workflow です。署名なしの release APK を正式 Release へ添付する経路はありません。
 
 ## リリース手順
 
-```bash
-# バージョンタグを打つだけでリリースが自動作成されます
-git tag v1.2.0
-git push origin v1.2.0
+正式鍵を安全な PC で一度だけ作成・バックアップし、GitHub の署名 Environment と main 保護をオーナーが設定します。オーナーがマージした版の増加・正式ノート・実機確認後、main の確定 SHA と `vX.Y.Z` を指定して手動公開します。PR／main マージ／タグ push だけでは正式公開しません。
 
-# ベータリリースの場合
-git tag v1.2.0-beta
-git push origin v1.2.0-beta
-```
-
-- 署名シークレット（`ANDROID_KEYSTORE_BASE64` 等）が設定済みの場合 → 署名済み APK を GitHub Release に添付
-- 署名シークレット未設定の場合 → 未署名 APK を GitHub Release に添付（実機テスト用）
-- `-beta` を含むタグ → プレリリース扱い
-
-詳細な署名設定手順は [docs/ci-cd.md](docs/ci-cd.md) を参照してください。
+詳しくは [署名・安全な公開・旧 debug 版からの移行](docs/releasing.md) と [CI](docs/ci-cd.md) を参照してください。**署名が異なる APK への切替前に、JSON／Google Drive のバックアップと復元を確認してください。バックアップなしのアンインストールは行わないでください。**
 
 ## ディレクトリ構造
 
@@ -177,7 +162,8 @@ memoez/
 | [docs/app-icon.md](docs/app-icon.md) | アプリアイコンの SVG 元データ・PNG 再生成・Android 表示確認 |
 | [docs/database.md](docs/database.md) | DB設計・テーブル定義・マイグレーション方針 |
 | [docs/google-drive-setup.md](docs/google-drive-setup.md) | 開発者向け Google Drive 連携設定（Cloud Console・Client ID・SHA-1・CI） |
-| [docs/ci-cd.md](docs/ci-cd.md) | CI/CD ワークフロー・署名設定手順 |
+| [docs/ci-cd.md](docs/ci-cd.md) | 通常 CI と Expo ビルド設定 |
+| [docs/releasing.md](docs/releasing.md) | 正式署名・公開ガード・配布契約・バックアップ移行 |
 | [docs/release-note.md](docs/release-note.md) | 全バージョンのリリースノート（新しい順） |
 | [docs/release-checklist-v0.4.0.md](docs/release-checklist-v0.4.0.md) | v0.4.0（ウィジェット）の実機確認項目 |
 | [docs/release-checklist-v0.5.0.md](docs/release-checklist-v0.5.0.md) | v0.5.0（一覧ウィジェット）の実機確認項目 |

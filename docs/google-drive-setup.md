@@ -91,7 +91,7 @@ npx expo run:android        # development build（Expo Go は不可）
 
 ワークフロー（`android-build.yml` / `release-signed-apk.yml`）の APK ビルドステップが、この変数を環境変数として渡します。未登録でもビルドは通り、Google Drive 連携だけが無効になります。
 
-リリース APK は `release-signed-apk.yml` が署名するため、**そのキーストアの SHA-1 を Android クライアントに登録**してください（上表）。
+リリース APK は [正式署名 Workflow](releasing.md) が署名するため、**そのキーストアの SHA-1 を Android クライアントに登録**してください（上表）。
 
 ## 4. 動作の仕様
 
@@ -114,3 +114,9 @@ npx expo run:android        # development build（Expo Go は不可）
 ```bash
 adb logcat *:S ReactNativeJS:V | grep GoogleDrive
 ```
+
+## 正式署名への移行時（必須の実機確認）
+
+debug の SHA-1 登録を release 用として流用しないでください。オーナーが正式鍵の公開証明書 SHA-1 と `com.memoez.app` の組を Android OAuth クライアントへ追加し、同じプロジェクトのウェブ Client ID を正式ビルドへ渡します。秘密鍵自体や keystore は Google Cloud にアップロードしません。
+
+旧アプリを消す前に JSON と Drive の退避・別端末での復元を確認します。正式候補 APK で Google アカウントへの接続、Drive バックアップ、復元、再起動後の再接続を確認してください。未設定の Client ID や署名違いによる認証失敗を、アンインストールやデータ消去で解決しないでください。詳細は [移行チェック](releasing.md#旧-debug-版からの移行実機未確認) を参照。
