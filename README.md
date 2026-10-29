@@ -25,6 +25,7 @@
 - ホーム画面の一覧ウィジェット（4×2。最近のメモをピン留め優先・更新順に最大 50 件表示し、行をタップすると同じ編集画面で編集できる）
 - JSON ファイルへのバックアップとインポート
 - Google Drive へのバックアップと復元（任意・手動。利用者はアプリ内で Google アカウントに接続するだけで利用可能）
+- 設定画面から正式リリースの確認と安全なアプリ更新（Android の最終承認が必要）
 - ダーク / ライトテーマ（端末設定に追従）・一覧レイアウト切り替え（Zustand で永続化）
 - 将来のサーバー同期に向けた `serverId` / `syncedAt` カラム対応済み
 
@@ -163,6 +164,7 @@ memoez/
 | [docs/database.md](docs/database.md) | DB設計・テーブル定義・マイグレーション方針 |
 | [docs/google-drive-setup.md](docs/google-drive-setup.md) | 開発者向け Google Drive 連携設定（Cloud Console・Client ID・SHA-1・CI） |
 | [docs/ci-cd.md](docs/ci-cd.md) | 通常 CI と Expo ビルド設定 |
+| [docs/app-updates.md](docs/app-updates.md) | 設定画面の更新確認・安全性・実機チェック |
 | [docs/releasing.md](docs/releasing.md) | 正式署名・公開ガード・配布契約・バックアップ移行 |
 | [docs/release-note.md](docs/release-note.md) | 全バージョンのリリースノート（新しい順） |
 | [docs/release-checklist-v0.4.0.md](docs/release-checklist-v0.4.0.md) | v0.4.0（ウィジェット）の実機確認項目 |

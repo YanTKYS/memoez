@@ -5,7 +5,7 @@
 ## 公開契約
 
 - applicationId は `com.memoez.app` のまま。正本は `app.json` の `expo.version` と `expo.android.versionCode`。`package.json` の version も同じ版に更新する。正式タグは厳密な `vX.Y.Z`（beta 等は本経路では拒否）。
-- `versionName` と `versionCode` は、過去の正式公開版から両方増やす。初回基準は既存 v0.5.0 / code 8（`tools/release-policy.json`）。本 PR はバージョンを上げず、現在の v0.5.0 を再公開しない。
+- `versionName` と `versionCode` は、過去の正式公開版から両方増やす。初回基準は既存 v0.5.0 / code 8（`tools/release-policy.json`）。基盤導入 PR #76 は v0.5.0 を維持して再公開しない。更新機能は v0.6.0/code9 で導入し、公開有効化と初回の正式署名運用はオーナーの設定完了後に判断する。
 - 同じ鍵を使い続ける。リリースごとの鍵生成・自動的な証明書ローテーションは禁止。v0.5.0 以前の Releases が正式な同一鍵だったとは仮定しない。既存 APK の証明書と手元の鍵をオーナーが確認し、異なる場合は下記の初回移行を行う。
 - Releases の正式資産は **3 個だけ**：`memoez-vX.Y.Z.apk`、`memoez-vX.Y.Z.apk.sha256`、`memoez-vX.Y.Z.json`。資産名を固定し、unsigned／debug APK は混ぜない。
 - `.apk.sha256` は SHA-256＋空白2個＋APKファイル名＋改行。JSON の schemaVersion は 1、`applicationId`、`versionName`、`versionCode`、`commit`、`certificateSha256`、`apkSha256`、`apkAsset` を持つ。次のアプリ内更新機能は stable・非 draft の Release だけを選び、JSON と APK のバージョン・証明書・ハッシュを照合する。インストーラーの署名検証を省略しない。
@@ -46,7 +46,7 @@ Environment Secrets がなくても通常 PR/main CI は動く。署名ステッ
 
 1. リリース PR に app.json／package.json の新しい安定版、増加した versionCode、`docs/release-note.md` の**ドラフトではない** `## vX.Y.Z` 節と `### Title`（`vX.Y.Z:` 開始）／`### Note`、実機検証記録を揃える。既存の過去ノートは消さない。
 2. ChatGPT がチャット／PR コメントでレビューし、オーナー **YanTKYS** が内容と CI を確認して保護された main へ PR をマージする。API で確認できるこのオーナーマージが公開の最終承認であり、別アカウントの GitHub APPROVED は不要。自分で作成した PR も同じ条件で扱う。既存の自動マージ処理にリリース PR を渡さない（必要なら一度だけオーナーがその Workflow を停止）。bot 等のマージからは正式公開しない。
-3. main push で Workflow を自動起動。秘密鍵なしの軽量 plan が app.json／package.json と既存の正式版を照合する。同じ versionName／versionCode は `skip` で正常終了し、SDK 導入・release ビルド・署名・公開ジョブを実行しない。初回の公開無効フラグも `skip`。v0.5.0/code8 のこの PR マージでは公開せず、最初の公開は次の安定版とする。
+3. main push で Workflow を自動起動。秘密鍵なしの軽量 plan が app.json／package.json と既存の正式版を照合する。同じ versionName／versionCode は `skip` で正常終了し、SDK 導入・release ビルド・署名・公開ジョブを実行しない。初回の公開無効フラグも `skip`。基盤導入 PR #76（v0.5.0/code8）のマージは skip。以後、増加した安定版の PR が初回公開候補となる。公開無効の間は版を上げても署名・公開しない。
 4. 新版は、main が保護されていること、起動 SHA が現在の main HEAD と一致すること、GitHub API が示す PR の merge_commit_sha／merged_by／base と before-after を検証する。正式な Review が0件でも正当なオーナーマージなら受け付ける。チャット／コメントを APPROVED に読み替えたり、その文面を自動判定したりはしない。PR／tag／手動イベント、main の作成・削除・強制 push、直接 push は公開根拠にせず、bot・非オーナーのマージも拒否する。
 5. merge は親が `[push.before, PR.head.sha]` と一致すること、squash／単一コミット rebase は1親が push.before であることを検証する。GitHub API の merge_commit_sha はそれぞれ merge commit／squash commit／rebase 後の最終 commit を指す。複数コミット rebase は before→after の完全な1親チェーン・PR のコミット数・元 PR head を照合し、元の各変更と rebased commit の `git patch-id --stable` の一致も検証する。250件超、欠けた API 応答、空または取得不能な diff は拒否する。証跡を確かめられない場合は merge／squash を使う。
 6. Environment は main 1件限定を必須とし、追加 Required reviewers がないことを確認する。版の増加、確定ノート、既存タグ／Release／Draft の非衝突、証明書固定値を確認。候補だけ SDK を用意し、最新正式 APK の署名と実際の code を再検証する。README 等の同版 PR にこの高コストな検証は走らない。

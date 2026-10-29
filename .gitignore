@@ -21,3 +21,6 @@ web-build/
 *.keystore.b64
 /release-plan.json
 __pycache__/
+# Local Expo modules: generated Android outputs only.
+/modules/*/android/build/
+/modules/*/android/.cxx/

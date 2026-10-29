@@ -154,7 +154,7 @@ class ReleaseGuards(unittest.TestCase):
 
     def test_disabled_release_skips_without_remote_access(self):
         with patch.dict(os.environ, {'MEMOEZ_RELEASE_ENABLED': ''}), patch.object(r, 'push_context'), patch.object(r, 'command', return_value=SHA), patch.object(r, 'api') as api:
-            self.assertEqual(r.make_plan('v0.5.0', SHA)['action'], 'skip')
+            self.assertEqual(r.make_plan(sha=SHA)['action'], 'skip')
             api.assert_not_called()
 
     def test_missing_secrets_fail_before_writing(self):
