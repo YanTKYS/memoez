@@ -14,3 +14,10 @@ web-build/
 # expo prebuild が生成するネイティブプロジェクト（ルートのみ。modules/*/android はソース管理する）
 /android/
 /ios/
+
+# Release-signing material must remain outside the checkout.
+*.keystore
+*.jks.b64
+*.keystore.b64
+/release-plan.json
+__pycache__/

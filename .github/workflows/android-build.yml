@@ -7,12 +7,14 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # build: デバッグ APK (全ブランチ / PR)
   # ──────────────────────────────────────────────────────────────────────────
   build:
-    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
 
     steps:
@@ -30,7 +32,13 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: Release guard tests (no secrets)
+        run: python3 -m unittest discover -s tools/tests -v
+
+      - name: Jest
+        run: npm test -- --runInBand
 
       # ── TypeScript / 静的チェック ────────────────────────────────────────
       - name: TypeScript check
@@ -56,36 +64,6 @@ jobs:
       # android/ は .gitignore に含まれるため毎回生成する
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
-
-      # ── android/build.gradle / gradle.properties をパッチ ───────────────
-      # 生成された build.gradle は kotlinVersion を ext に定義するが
-      # classpath にバージョンを指定していないため RN の BOM が 1.9.24 を
-      # 解決してしまう。Compose Compiler 1.5.15 は 1.9.25 必須なので
-      # classpath に $kotlinVersion を明示する。
-      - name: Patch android build files for CI
-        run: |
-          # build.gradle: kotlin-gradle-plugin に $kotlinVersion を追加
-          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${kotlinVersion}\")|" android/build.gradle
-
-          # gradle.properties: メモリ設定を追記
-          {
-            echo ""
-            echo "# CI overrides"
-            echo "android.kotlinVersion=1.9.25"
-            echo "kotlin.jvm.target.validation.mode=warning"
-            echo "org.gradle.configuration-cache=false"
-            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
-            echo "kotlin.daemon.jvm.options=-Xmx2g"
-            echo "org.gradle.workers.max=2"
-            echo "org.gradle.caching=true"
-            echo "org.gradle.configuration-cache=true"
-            echo "org.gradle.parallel=true"
-          } >> android/gradle.properties
-
-          echo "=== patched build.gradle classpath ==="
-          grep "kotlin-gradle-plugin" android/build.gradle
-          echo "=== patched gradle.properties (kotlin lines) ==="
-          grep -i kotlin android/gradle.properties
 
       # ── Gradle キャッシュ ────────────────────────────────────────────────
       # キャッシュキー: npm パッケージ + app.json で決定される生成物に依存
@@ -193,118 +171,3 @@ jobs:
           name: lint-report
           path: android/app/build/reports/lint-results-debug.html
           retention-days: 14
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # release-apk: リリース APK (main マージ後のみ)
-  # ──────────────────────────────────────────────────────────────────────────
-  release-apk:
-    runs-on: ubuntu-24.04
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: >-
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
-            ndk;26.1.10909125
-
-      - name: Expo prebuild
-        run: npx expo prebuild --platform android --no-install
-
-      - name: Patch android build files for CI
-        run: |
-          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${kotlinVersion}\")|" android/build.gradle
-          {
-            echo ""
-            echo "# CI overrides"
-            echo "android.kotlinVersion=1.9.25"
-            echo "kotlin.jvm.target.validation.mode=warning"
-            echo "org.gradle.configuration-cache=false"
-            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
-            echo "kotlin.daemon.jvm.options=-Xmx2g"
-            echo "org.gradle.workers.max=2"
-            echo "org.gradle.caching=true"
-            echo "org.gradle.configuration-cache=true"
-            echo "org.gradle.parallel=true"
-          } >> android/gradle.properties
-
-      - name: Cache Gradle packages
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('package-lock.json', 'app.json') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
-
-      - name: Verify checkout SHA
-        run: |
-          EXPECTED_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-          echo "EXPECTED_SHA=$EXPECTED_SHA"
-          echo "HEAD=$(git rev-parse HEAD)"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-
-      - name: Build release APK (unsigned)
-        shell: bash
-        env:
-          # 任意。未設定なら Google Drive 連携は無効のビルドになる（docs/google-drive-setup.md）
-          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
-        run: |
-          cd android
-          ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
-            echo "===== BUILD FAILED: compiler errors ====="
-            grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
-              /tmp/gradle-release.log \
-              | grep -v "^/" \
-              | head -100
-            echo "===== FAILURE block ====="
-            sed -n '/FAILURE: Build failed with an exception\./,/BUILD FAILED in/p' /tmp/gradle-release.log | head -150 || true
-            echo "===== last 20 lines ====="
-            tail -20 /tmp/gradle-release.log
-            exit 1
-          }
-
-      # R8/ProGuard の missing_rules があれば保存
-      - name: Upload R8 missing rules
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: r8-missing-rules
-          path: android/app/build/outputs/mapping/release/missing_rules.txt
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Upload release APK (unsigned)
-        uses: actions/upload-artifact@v6
-        with:
-          name: app-release-unsigned
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
-          retention-days: 30

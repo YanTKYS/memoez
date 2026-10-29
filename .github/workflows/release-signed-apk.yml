@@ -1,315 +1,178 @@
 name: Release Signed APK
 
+# The reviewed owner merge is approval. No manual tag/SHA inputs or per-release approval.
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Release tag (e.g. v1.0.0 or v1.0.0-beta)'
-        required: true
-        default: 'v0.0.0-test'
+    branches: [main]
 
-permissions:
-  contents: write
+permissions: {}
+concurrency:
+  group: memoez-formal-release
+  cancel-in-progress: false
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  MEMOEZ_RELEASE_CERT_SHA256: ${{ vars.MEMOEZ_RELEASE_CERT_SHA256 }}
+  MEMOEZ_RELEASE_ENABLED: ${{ vars.MEMOEZ_RELEASE_ENABLED }}
 
 jobs:
-  release-signed-apk:
+  plan:
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+    if: github.repository == 'YanTKYS/memoez' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          fetch-depth: 0
-
-
-      - name: Ensure release tag exists (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          TAG_NAME="${{ github.event.inputs.tag_name }}"
-          if [ -z "$TAG_NAME" ]; then
-            echo "ERROR: tag_name is required for workflow_dispatch" >&2
-            exit 1
-          fi
-
-          git fetch --tags --force
-          if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
-            echo "Tag already exists: $TAG_NAME"
-          else
-            git tag "$TAG_NAME" "$GITHUB_SHA"
-            git push origin "refs/tags/$TAG_NAME"
-            echo "Created and pushed tag: $TAG_NAME"
-          fi
-
-      # ── Node.js ─────────────────────────────────────────────────────────
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      # ── JDK / Android SDK ───────────────────────────────────────────────
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Decide release or skip without signing secrets or SDK installation
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release.py plan --out release-plan.json
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        if: steps.plan.outputs.action == 'release'
         with:
           java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+          distribution: temurin
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        if: steps.plan.outputs.action == 'release'
         with:
-          packages: >-
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
-            ndk;26.1.10909125
-
-      # ── Expo prebuild (managed → bare) ──────────────────────────────────
-      - name: Expo prebuild
-        run: npx expo prebuild --platform android --no-install
-
-      # ── android/build.gradle / gradle.properties をパッチ ───────────────
-      # 生成された build.gradle は kotlinVersion を ext に定義するが
-      # classpath にバージョンを指定していないため RN の BOM が 1.9.24 を
-      # 解決してしまう。Compose Compiler 1.5.15 は 1.9.25 必須。
-      - name: Patch android build files
-        run: |
-          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath(\"org.jetbrains.kotlin:kotlin-gradle-plugin:\${kotlinVersion}\")|" android/build.gradle
-          {
-            echo ""
-            echo "# CI overrides"
-            echo "android.kotlinVersion=1.9.25"
-            echo "kotlin.jvm.target.validation.mode=warning"
-            echo "org.gradle.configuration-cache=false"
-            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError"
-            echo "kotlin.daemon.jvm.options=-Xmx2g"
-            echo "org.gradle.workers.max=2"
-            echo "org.gradle.caching=true"
-            echo "org.gradle.configuration-cache=true"
-            echo "org.gradle.parallel=true"
-          } >> android/gradle.properties
-
-      # ── Gradle キャッシュ ────────────────────────────────────────────────
-      - name: Cache Gradle packages
-        uses: actions/cache@v5
+          packages: 'build-tools;35.0.0'
+      - name: Verify latest published APK before building a new release
+        if: steps.plan.outputs.action == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release.py verify-history --plan release-plan.json
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: steps.plan.outputs.action == 'release'
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('package-lock.json', 'app.json') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          name: release-plan
+          path: release-plan.json
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
+  build:
+    needs: plan
+    if: needs.plan.outputs.action == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+      EXPO_NO_TYPESCRIPT_SETUP: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;26.1.10909125'
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit && npm test -- --runInBand
+      - run: python3 -m unittest discover -s tools/tests -v
+      - run: npx expo prebuild --platform android --clean --no-install
+      - name: Build genuinely unsigned release (no secrets, no generated-file patches)
+        working-directory: android
+        run: ./gradlew :app:assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --max-workers=2
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: unsigned-release-input
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
 
-      # ── リリース APK ビルド ──────────────────────────────────────────────
-      - name: Build release APK (unsigned)
-        shell: bash
-        env:
-          # 任意。未設定なら Google Drive 連携は無効のビルドになる（docs/google-drive-setup.md）
-          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
-        run: |
-          cd android
-          ./gradlew assembleRelease -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-release.log 2>&1 || {
-            echo "===== BUILD FAILED: Kotlin / compiler errors ====="
-            grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
-              /tmp/gradle-release.log \
-              | grep -v "^/" \
-              | head -80
-            echo "===== FAILURE block ====="
-            sed -n '/FAILURE: Build failed with an exception\./,/BUILD FAILED in/p' /tmp/gradle-release.log | head -150 || true
-
-            echo "===== Context around first FAILED task (50 lines before) ====="
-            FAIL_LINE=$(grep -n " FAILED$" /tmp/gradle-release.log | head -1 | cut -d: -f1)
-            if [ -n "$FAIL_LINE" ]; then
-              START=$(( FAIL_LINE > 50 ? FAIL_LINE - 50 : 1 ))
-              sed -n "${START},${FAIL_LINE}p" /tmp/gradle-release.log
-            fi
-
-            echo "===== last 20 lines ====="
-            tail -20 /tmp/gradle-release.log
-            exit 1
-          }
-
-      # ── 生成された APK を特定する ────────────────────────────────────────
-      # AGP のバージョンにより unsigned / 署名済みどちらが生成されるか変わる
-      - name: Locate release APK
-        id: locate_apk
-        run: |
-          APK_DIR="android/app/build/outputs/apk/release"
-          echo "=== APK directory contents ==="
-          ls -lh "$APK_DIR" || echo "(directory not found)"
-
-          # 優先順: unsigned → apk 全般
-          if [ -f "$APK_DIR/app-release-unsigned.apk" ]; then
-            echo "unsigned_apk=$APK_DIR/app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
-          elif [ -f "$APK_DIR/app-release.apk" ]; then
-            echo "unsigned_apk=$APK_DIR/app-release.apk" >> "$GITHUB_OUTPUT"
-          else
-            FOUND=$(find "$APK_DIR" -name "*.apk" | head -1)
-            if [ -n "$FOUND" ]; then
-              echo "unsigned_apk=$FOUND" >> "$GITHUB_OUTPUT"
-            else
-              echo "ERROR: No APK found in $APK_DIR" && exit 1
-            fi
-          fi
-          echo "Resolved APK: $(cat $GITHUB_OUTPUT | grep unsigned_apk)"
-
-      # ── タグからリリースチャンネルを判定 ─────────────────────────────────
-      - name: Detect release channel from tag
-        id: release_channel
-        run: |
-          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
-          if [[ "$TAG_NAME" == *"-beta"* ]]; then
-            echo "prerelease=true"  >> "$GITHUB_OUTPUT"
-            echo "channel=beta"     >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "channel=stable"   >> "$GITHUB_OUTPUT"
-          fi
-
-      # ── 署名シークレットの存在チェック ──────────────────────────────────
-      - name: Check signing secrets
-        id: signing
-        env:
-          ANDROID_KEYSTORE_BASE64:  ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS:        ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD:     ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && \
-             [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && \
-             [ -n "$ANDROID_KEY_ALIAS" ] && \
-             [ -n "$ANDROID_KEY_PASSWORD" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "Signing secrets detected."
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Signing secrets are missing. Skipping signing and release upload."
-          fi
-
-      # ── キーストアのデコード ─────────────────────────────────────────────
-      - name: Decode keystore
-        if: steps.signing.outputs.ready == 'true'
+  sign:
+    needs: [plan, build]
+    if: needs.plan.outputs.action == 'release' && github.ref == 'refs/heads/main'
+    environment: release-signing
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'build-tools;35.0.0'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-plan
+          path: input/plan
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: unsigned-release-input
+          path: input/apk
+      - name: Sign, verify certificate/package/version/non-debuggable and write checksum
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release-keystore.jks
-
-      # ── エイリアス確認 ───────────────────────────────────────────────────
-      - name: Validate keystore alias
-        if: steps.signing.outputs.ready == 'true'
-        env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS:         ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          keytool -list \
-            -keystore release-keystore.jks \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-            -alias     "$ANDROID_KEY_ALIAS"
-
-      # ── zipalign → apksigner で署名 ──────────────────────────────────────
-      - name: Sign APK
-        if: steps.signing.outputs.ready == 'true'
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS:         ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_SDK_ROOT:  ${{ env.ANDROID_SDK_ROOT }}
-        run: |
-          UNSIGNED_APK="${{ steps.locate_apk.outputs.unsigned_apk }}"
-          ALIGNED_APK="android/app/build/outputs/apk/release/app-release-aligned.apk"
-          SIGNED_APK="android/app/build/outputs/apk/release/app-release-signed.apk"
-          BUILD_TOOLS_DIR="$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -n1)"
-          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
-          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
-
-          test -x "$ZIPALIGN"  || (echo "zipalign not found: $ZIPALIGN"  && exit 1)
-          test -x "$APKSIGNER" || (echo "apksigner not found: $APKSIGNER" && exit 1)
-
-          "$ZIPALIGN" -p -f 4 "$UNSIGNED_APK" "$ALIGNED_APK"
-          "$APKSIGNER" sign \
-            --ks           release-keystore.jks \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass      "pass:$KEYSTORE_PASSWORD" \
-            --key-pass     "pass:$KEY_PASSWORD" \
-            --out          "$SIGNED_APK" \
-            "$ALIGNED_APK"
-
-          "$APKSIGNER" verify "$SIGNED_APK"
-          echo "APK signed and verified: $SIGNED_APK"
-
-      # ── GitHub Release を作成して APK をアップロード ────────────────────
-      # 署名済み APK があれば signed を、なければ unsigned を Release に添付する。
-      # どちらの場合も GitHub Release は必ず作成される。
-      - name: Resolve APK path for release
-        id: apk
-        run: |
-          SIGNED="android/app/build/outputs/apk/release/app-release-signed.apk"
-          if [ -f "$SIGNED" ]; then
-            echo "path=$SIGNED" >> "$GITHUB_OUTPUT"
-            echo "label=app-release-signed.apk" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=${{ steps.locate_apk.outputs.unsigned_apk }}" >> "$GITHUB_OUTPUT"
-            echo "label=app-release-unsigned.apk" >> "$GITHUB_OUTPUT"
-            echo "⚠️ Signing secrets not configured — uploading unsigned APK."
-          fi
-
-      - name: Resolve release title/body from docs
-        id: release_meta
-        shell: bash
-        run: |
-          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
-          CHANNEL="${{ steps.release_channel.outputs.channel }}"
-          DEFAULT_NAME="$TAG_NAME ($CHANNEL)"
-          RELEASE_DOC="docs/github-release-${TAG_NAME}.md"
-
-          if [ ! -f "$RELEASE_DOC" ]; then
-            echo "release_name=$DEFAULT_NAME" >> "$GITHUB_OUTPUT"
-            echo "generate_notes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          TITLE=$(awk '
-            /^## Title/ { in_title=1; next }
-            /^## Note/  { in_title=0 }
-            in_title && NF { gsub(/`/, "", $0); print; exit }
-          ' "$RELEASE_DOC")
-
-          if [ -z "$TITLE" ]; then
-            TITLE="$DEFAULT_NAME"
-          fi
-
-          BODY=$(awk '
-            /^## Note/ { in_note=1; next }
-            in_note { print }
-          ' "$RELEASE_DOC")
-
-          echo "release_name=$TITLE" >> "$GITHUB_OUTPUT"
-          echo "generate_notes=false" >> "$GITHUB_OUTPUT"
-          {
-            echo "release_body<<EOF"
-            echo "$BODY"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release and upload APK
-        uses: softprops/action-gh-release@v3
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: python3 tools/release.py sign --plan input/plan/release-plan.json --apk input/apk/app-release-unsigned.apk --out dist
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          files: ${{ steps.apk.outputs.path }}
-          body: ${{ steps.release_meta.outputs.release_body }}
-          generate_release_notes: ${{ steps.release_meta.outputs.generate_notes }}
-          prerelease: ${{ steps.release_channel.outputs.prerelease }}
-          name: ${{ steps.release_meta.outputs.release_name }}
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: verified-signed-release
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [plan, sign]
+    if: needs.plan.outputs.action == 'release' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: read
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'build-tools;35.0.0'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-plan
+          path: input/plan
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: verified-signed-release
+          path: dist
+      - name: Recheck approval and collisions, stage only our new draft, download and verify, publish last
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release.py publish --plan input/plan/release-plan.json --directory dist >> "$GITHUB_STEP_SUMMARY"
+
+  report-failure:
+    needs: [plan, build, sign, publish]
+    if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report failure without publishing
+        run: echo '## failed — inspect the failed step and any partial tag/Draft before retrying' >> "$GITHUB_STEP_SUMMARY"

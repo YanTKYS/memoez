@@ -37,7 +37,8 @@
           "enableFTS": true,
           "useSQLCipher": false
         }
-      ]
+      ],
+      "./plugins/withAndroidBuild"
     ],
     "scheme": "memoez",
     "experiments": {
