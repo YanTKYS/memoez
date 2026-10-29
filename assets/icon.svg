@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>MemoEZ — folded sticky note</title>
+  <rect id="background" width="1024" height="1024" fill="#124B4B"/>
+  <!-- All foreground pixels stay inside Android's central 66/108 safe circle. -->
+  <g id="note">
+    <path fill="#FFF9C4" fill-rule="evenodd" d="M336 280H688Q744 280 744 336V600L600 744H336Q280 744 280 688V336Q280 280 336 280Z M376 408H648A24 24 0 0 1 648 456H376A24 24 0 0 1 376 408Z M376 512H600A24 24 0 0 1 600 560H376A24 24 0 0 1 376 512Z"/>
+    <path id="fold" fill="#F2B544" d="M600 744V656Q600 600 656 600H744Z"/>
+  </g>
+</svg>
