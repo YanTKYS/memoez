@@ -53,7 +53,7 @@ Environment Secrets がなくても通常 PR/main CI は動く。署名ステッ
 - [ ] main の Ruleset は active、API の `protected=true`、PR 必須・Required approvals 0・必須 status `build` と、バイパス等を再確認した。対象を main に限定し、作業ブランチの作成・push と PR CI を妨げないことも確認する。別アカウントの APPROVED は追加条件にしない。
 - [ ] ソースは `0.6.0`／code 9／`com.memoez.app`、package.json／lock と一致し、確定した `## v0.6.0` の Title／Note がある。準備 PR の `build` が成功し、ChatGPT のレビュー内容を確認した。
 - [ ] 保存したい旧 APK のデータがあれば、旧アプリを残したまま JSON を端末外へ退避し、復元を確認した。鍵が違う旧 APK への上書きは要求せず、データ保全なしにアンインストールしない。
-- [ ] 以下の未実施事項を理解し、公開する直前に `MEMOEZ_RELEASE_ENABLED=true` として、このレビュー済み準備 PR を **オーナーが** main にマージする。公開するつもりのない他 PR を先にマージしない。既存の自動マージ Workflow に渡さず、必要な停止操作もオーナーが判断する。
+- [ ] PR #82（Issue #81）の自動マージ Workflow 削除を先に main へ取り込んだ。削除 PR のマージまでは `MEMOEZ_RELEASE_ENABLED=false` を維持し、準備 PR #80 は Draft のままにする。その後、以下の未実施事項と PR #80 の CI を確認し、公開する直前にフラグを true にして Ready for review に切り替え、PR #80 を **オーナー本人が手動マージ**する。公開するつもりのない他 PR を先にマージしない。毎回の Actions 停止は不要。
 
 ### 公開後：自動 Release と実機を確認する
 
