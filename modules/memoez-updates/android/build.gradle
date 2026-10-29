@@ -1,0 +1,17 @@
+apply plugin: 'com.android.library'
+group = 'com.memoez.updates'
+version = '1.0.0'
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+android {
+  namespace 'expo.modules.memoezupdates'
+}
+dependencies {
+  implementation 'androidx.core:core:1.13.1'
+  implementation 'com.android.tools.build:apksig:8.6.1'
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
+}

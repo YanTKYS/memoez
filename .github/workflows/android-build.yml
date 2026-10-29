@@ -99,7 +99,7 @@ jobs:
           EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
         run: |
           cd android
-          ./gradlew assembleDebug -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
+          ./gradlew assembleDebug :memoez-updates:testDebugUnitTest -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon --info > /tmp/gradle-debug.log 2>&1 || {
             echo "===== BUILD FAILED: Kotlin / compiler errors ====="
             grep -E "^e: |^w: .*error|> .*[Ee]rror|FAILED|^Caused by:|Cannot find module|unresolved reference|is not known to be compatible|BUILD FAILED" \
               /tmp/gradle-debug.log \

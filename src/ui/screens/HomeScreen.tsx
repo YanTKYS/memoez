@@ -123,8 +123,9 @@ export function HomeScreen() {
           onPress={() => router.push('/labels')}
         />
         <Appbar.Action
-          icon="database-export-outline"
-          onPress={() => router.push('/backup')}
+          icon="cog-outline"
+          accessibilityLabel="設定"
+          onPress={() => router.push('/settings')}
         />
       </Appbar.Header>
 
