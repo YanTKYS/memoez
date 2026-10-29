@@ -1,6 +1,6 @@
 # 正式署名 APK の公開・更新
 
-この文書はオーナー／公開担当者向け。**本基盤の PR・CI・main マージだけではタグ／正式 Release を作らない。** 初回設定と実機検証を終え、オーナーが公開方針を承認するまで `MEMOEZ_RELEASE_ENABLED` を設定しない。署名鍵やパスワードを ChatGPT・PR・ログへ渡さない。
+この文書はオーナー／公開担当者向け。**レビュー済み PR をオーナーが main にマージしたことを、新版の正式公開承認とする。** 同版の通常 PR は `skip`、新しい安定版だけが自動公開候補になる。手動 workflow_dispatch・タグ／SHA 入力・毎回の Environment 追加承認は使わない。 初回設定と実機検証を終え、オーナーが公開方針を承認するまで `MEMOEZ_RELEASE_ENABLED` を設定しない。署名鍵やパスワードを ChatGPT・PR・ログへ渡さない。
 
 ## 公開契約
 
@@ -13,8 +13,8 @@
 
 ## 初回設定（オーナーが行う／この PR では未設定）
 
-1. main の Ruleset／ブランチ保護で PR 必須・レビュー・Android Build を必須にし、force push／削除を禁止。管理者の迂回も制限する。タグ `v*` の変更・削除・未承認作成も保護する。実行時にも main の `protected` を確認するが、適切なレビュー要件まではコードだけでは保証できない。
-2. Environment **release-signing** を作り、deployment branch policy は **branch の main 1件のみ**にする（全保護ブランチ、ワイルドカード、tag は不可）。Required reviewers を必ず設定。自己レビュー禁止を使う場合、dispatch するオーナー以外の承認担当者も用意する。Environment の管理者バイパスは無効にする。
+1. main の Ruleset／ブランチ保護で PR 必須・レビュー・Android Build を必須にし、force push／削除を禁止。管理者の迂回も制限する。タグ `v*` の変更・削除・未承認作成も保護する。main への直接 push を Roles／管理者を含めて制限し、必須レビューの stale 承認破棄と最新 push に対する承認も有効にする。オーナーが必要なレビュー／CI を迂回してマージできる設定にしない。実行時には main の `protected` と GitHub API 上の現在の PR head の承認も確認するが、Ruleset の全 Roles・例外・バイパス設定まで証明できるわけではない。管理者による Workflow／保護設定／Secrets の変更を防ぐ境界は GitHub 側の権限管理である。
+2. Environment **release-signing** を作り、deployment branch policy は **branch の main 1件のみ**にする（全保護ブランチ、ワイルドカード、tag は不可）。Environment の Required reviewers は設定しない（既存設定は一度だけ外す）。毎回の公開承認は main の PR レビューとオーナーマージに集約する。追加 reviewers が残っていれば plan は停止する。Environment Secrets は main 限定を保ち、PR／任意ブランチでは使わせない。
 3. 鍵は自分の安全な PC で一度だけ作り、別媒体へ暗号化バックアップする。既存の正式鍵がある場合は新規生成しない。以下は**オーナーの PC 用**であり、CI／このクラウドでは正式鍵を生成しない。
 
 ```sh
@@ -39,15 +39,17 @@ keytool -list -v -keystore /safe/private/location/memoez-release.jks -alias memo
 
 Environment Secrets がなくても通常 PR/main CI は動く。署名ステップで4項目のどれかが不足すれば失敗し、unsigned へのフォールバックはしない。値をログやコマンド引数のパスワードへ展開せず、apksigner の `env:` パスワード入力を使う。鍵は runner の一時領域へ mode 600 で復号し、成功・失敗とも削除する。署名ジョブには contents:write を与えず、署名用キャッシュや秘密情報の Artifacts を作らない。
 
-## 正式公開手順
+## 通常の自動公開
 
-1. リリース PR に app.json の増加した version/code、`docs/release-note.md` の**ドラフトではない** `## vX.Y.Z` 節、`### Title`（`vX.Y.Z:` で開始）と `### Note`、実機検証記録を揃える。既存の過去ノートは消さない。
-2. ChatGPT 等によるレビュー後、オーナー **YanTKYS** が main へマージする。既存の自動マージ処理にリリース PR を渡さない（必要ならオーナーが自動マージ Workflow を停止）。bot がマージした SHA は公開ガードに拒否される。
-3. main の最新 HEAD の40桁 SHA を確認し、オーナーが Actions → **Release Signed APK** → Run workflow → **main** を選び、tag=`vX.Y.Z` と commit=その SHA を入力する。入力タグはこの時点では未作成である必要がある。main が先に進んだ古い SHA は拒否する。通常の main push／PR／tag push は公開経路ではない。
-4. plan はオーナー操作（再実行者も照合）・オーナーマージ・main 保護・署名 Environment の制限／承認設定・版の増加・確定ノート・既存タグ／Release（非公開 Draft 含む）との非衝突を確認する。
-5. build は Secrets なしでテスト・clean prebuild・unsigned release を生成。署名ジョブは Environment 承認後にだけ鍵を受け取り、署名後に証明書固定値・package・version・non-debuggable を検証する。
-6. publish は署名鍵なし・contents:write の別ジョブ。全ガードを再確認し、新しいタグと**この実行専用の一時的な非公開 Draft**を作る。3資産を添付→再ダウンロードして SHA・署名・メタデータを検証→main の承認根拠とタグの不変を再確認→最後に正式公開する。既存 Draft の流用や prerelease の正式化は行わない。
-7. Workflow Summary の正式 URL を確認する。必要ならダウンロード後、以下で公開物を再検証する。署名情報を含み得るビルドには `--info`／`--debug`／`--scan` を付けない。
+1. リリース PR に app.json／package.json の新しい安定版、増加した versionCode、`docs/release-note.md` の**ドラフトではない** `## vX.Y.Z` 節と `### Title`（`vX.Y.Z:` 開始）／`### Note`、実機検証記録を揃える。既存の過去ノートは消さない。
+2. 独立したレビュー担当者が最新 PR head を承認し、オーナー **YanTKYS** が main へマージする。これが公開の最終承認。既存の自動マージ処理にリリース PR を渡さない（必要なら一度だけオーナーがその Workflow を停止）。bot 等のマージからは正式公開しない。
+3. main push で Workflow を自動起動。秘密鍵なしの軽量 plan が app.json／package.json と既存の正式版を照合する。同じ versionName／versionCode は `skip` で正常終了し、SDK 導入・release ビルド・署名・公開ジョブを実行しない。初回の公開無効フラグも `skip`。v0.5.0/code8 のこの PR マージでは公開せず、最初の公開は次の安定版とする。
+4. 新版は、main が保護されていること、起動 SHA が現在の main HEAD と一致すること、GitHub API が示す PR の merge_commit_sha／merged_by／base、最新 head に対する独立した有効な APPROVED review を検証する。取り消された承認、未解決の変更要求、古い head の承認は認めない。レビュー App の実際の APPROVED も利用できるが、単なる PR コメントや会話上の確認は承認証跡にならない。どのレビュアー／App が必須承認として数えられるかは GitHub の Roles・Ruleset で管理する。PR／tag／手動イベント、main の作成・削除・強制 push、直接 push は公開根拠にしない。
+5. merge は親が `[push.before, PR.head.sha]` と一致すること、squash／単一コミット rebase は1親が push.before であることを検証する。GitHub API の merge_commit_sha はそれぞれ merge commit／squash commit／rebase 後の最終 commit を指す。複数コミット rebase は before→after の完全な1親チェーン・PR のコミット数・元 PR head を照合し、元の各変更と rebased commit の `git patch-id --stable` の一致も検証する。250件超、欠けた API 応答、空または取得不能な diff は拒否する。証跡を確かめられない場合は merge／squash を使う。
+6. Environment は main 1件限定を必須とし、追加 Required reviewers がないことを確認する。版の増加、確定ノート、既存タグ／Release／Draft の非衝突、証明書固定値を確認。候補だけ SDK を用意し、最新正式 APK の署名と実際の code を再検証する。README 等の同版 PR にこの高コストな検証は走らない。
+7. build は Secrets なしでテスト・clean prebuild・unsigned release を生成。sign は main 限定 Environment の鍵だけを受け取り、署名後に証明書固定値・package・version・non-debuggable・3資産を検証する。追加の人手承認は待たない。
+8. 鍵を持たない publish ジョブが全ガードを再確認し、新規タグと**その実行専用の内部非公開 Draft**を作成。3資産を添付→再ダウンロード→署名・SHA・メタデータと GitHub digest を再検証→main のレビュー・マージ証跡とタグの不変を再確認→最後に正式公開する。既存 Draft の流用や prerelease の正式化はしない。
+9. Summary の `release`（候補）、`skip`、失敗時の `failed` と最終正式 URL を確認する。通常運用でタグ作成・SHA 入力・Environment 承認操作は不要。必要なら公開物を以下で再検証する。署名情報を含み得るビルドには `--info`／`--debug`／`--scan` を付けない。
 
 ```sh
 sha256sum -c memoez-vX.Y.Z.apk.sha256
@@ -59,11 +61,11 @@ APK の SHA-256 はファイルの一致、証明書 SHA-256 は継続更新の�
 
 ## 失敗・重複時
 
-公開経路は固定 concurrency で直列化し、進行中の run を自動キャンセルしない。既存タグ／Release／Draft があれば同じ commit でも停止する。既存資産の `--clobber`、タグの付け替え、既存 Draft の自動公開は行わない。
+公開経路は固定 concurrency で直列化し、進行中の run を自動キャンセルしない。公開済みの同版・同 code の後続 PR／成功済み run の再実行は `skip` となり再公開しない。既存の未公開タグ／Draft、同名で異なる code、巻き戻しは停止する。既存資産の `--clobber`、タグの付け替え、Draft の自動流用はしない。
 
-- タグ作成前の失敗：設定・アクセス・署名・ビルドを修復し、同じ承認済み HEAD の run を再実行できる。
-- タグや内部 Draft が残った失敗：オーナーが commit・証明書・資産と失敗段階を調査する。再実行は安全のため拒否される。自動削除せず、新しい増加版を PR で準備するか、オーナーが未公開物の扱いを判断する。既存 Draft の手動公開で検証を迂回しない。
-- 正式公開後：同じ版を再作成・置換しない。修正版は新しい version/code にする。
+- タグ作成前の失敗：設定／アクセス／署名／ビルドを修復し、GitHub 上で失敗した元の push run を再実行できる。新しい手動 dispatch やタグ／SHA 入力は不要。再実行者を公開承認とはせず、元のオーナーマージ・レビュー証跡、保護された現在の main HEAD を再検証する。main が先に進んだ元 run は公開しない。
+- タグや内部 Draft が残った失敗：通常の run を再実行しても停止し、既存物を削除／再公開しない。オーナーが commit・証明書・資産と失敗段階を調査し、未公開物を残したまま次の増加版の PR を準備するか、未公開物の扱いを例外的に判断する。中途半端な Draft を手動公開して検証を迂回しない。
+- 公開後：同版は正常 skip。修正は新しい版／code の PR をレビューしてオーナーがマージするだけで、新版の自動公開へ進む。
 
 ## 旧 debug 版からの移行（実機未確認）
 
@@ -82,7 +84,7 @@ APK の SHA-256 はファイルの一致、証明書 SHA-256 は継続更新の�
 
 ## 基盤の検証記録（正式公開の承認ではない）
 
-- 公開ガードの Python テスト23件、Jest 26スイート／128件、TypeScript、Lint、Android `lintDebug`、変更した Workflow の actionlint が成功。
+- 公開ガードの Python テスト32件、Jest 26スイート／128件、TypeScript、Lint、Android `lintDebug`、変更した Workflow の actionlint が成功。
 - config plugin による clean prebuild 後、生成物への手修正なしで `:app:assembleRelease :app:assembleDebug` が成功。release は `app-release-unsigned.apk`、debug は従来の debug 署名。
 - 一時的な検証専用鍵で unsigned release を2回署名し、証明書・package・version・non-debuggable・3資産を検証。unsigned／別証明書／debuggable／改変 APK を拒否することを実物で確認した。v4 増分インストール用 `.idsig` は単体配布では生成しない。テスト鍵と署名済みテスト資産は削除済み。
 - 再実行手順（正式鍵は不要）：
@@ -99,4 +101,6 @@ python3 tools/tests/signing_smoke.py
 
 `signing_smoke.py` は新しい一時テスト鍵を作るが、正式鍵として保存／使用しない。GitHub API、タグ作成、Release 作成を呼ばない。
 
-今回の読み取り時、main は `protected=false`、署名 Environment は未作成だった。Secrets／Variables 名の API は403で取得できず、既存値の有無は未確認。設定の変更・正式鍵の生成／取得・正式タグ／Release の作成は実施していない。正式鍵による再現署名、鍵バックアップの復旧確認、実機の移行／継続更新／2種ウィジェット／Drive 認証、GitHub 上の Environment 承認から実際の公開までの通し確認はオーナー作業として残る。
+今回の読み取り時、main は `protected=false`、署名 Environment は未作成だった。Secrets／Variables 名の API は403で取得できず、既存値の有無は未確認。設定の変更・正式鍵の生成／取得・正式タグ／Release の作成は実施していない。正式鍵による再現署名、鍵バックアップの復旧確認、実機の移行／継続更新／2種ウィジェット／Drive 認証、GitHub 上のオーナーマージから実際の自動公開までの通し確認はオーナー作業として残る。
+
+追加方針に合わせ、owner workflow_dispatch／GITHUB_TRIGGERING_ACTOR／Environment reviewers の承認要件は廃止した。マージ方法別の API 証跡、新版 release／同版 skip、強制／直接 push・非オーナーマージ・レビュー不足・古い SHA・不正な版／ノート／設定の拒否を単体検証している。実際の main 保護設定はオーナーが行い、未設定を許す緩和はしていない。

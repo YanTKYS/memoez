@@ -108,51 +108,149 @@ def validate_version(app, tag, releases, tags, previous):
     return code
 
 
-def approval(event, actor, ref, sha, requested_sha, branch, prs, environment, policies):
-    require(event == 'workflow_dispatch' and actor == OWNER and ref == 'refs/heads/main', 'Only owner manual dispatch on main may release')
-    require(re.fullmatch(r'[0-9a-f]{40}', requested_sha) and sha == requested_sha == branch['commit']['sha'], 'Requested commit must be the current main HEAD')
+def push_context(sha):
+    require(os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_REF') == 'refs/heads/main' and os.environ.get('GITHUB_REPOSITORY') == REPO, 'Only main push events may release')
+    require(re.fullmatch(r'[0-9a-f]{40}', sha or '') and os.environ.get('GITHUB_SHA') == sha, 'Invalid triggering commit')
+    event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+    require(event.get('ref') == 'refs/heads/main' and event.get('after') == sha and not any(event.get(k) for k in ['forced', 'deleted', 'created']), 'Ordinary main merge push required')
+    require(re.fullmatch(r'[0-9a-f]{40}', event.get('before', '')) and event['before'] != '0' * 40, 'Push before SHA required')
+    return event
+
+
+def reviewed(pr, reviews):
+    latest = {}
+    for review in sorted(reviews, key=lambda item: item['id']):
+        if review['state'] != 'COMMENTED':
+            latest[review['user']['login']] = review
+    require(not any(r['state'] == 'CHANGES_REQUESTED' for r in latest.values()), 'Unresolved change request')
+    require(any(r['state'] == 'APPROVED' and r['commit_id'] == pr['head']['sha'] and r['user']['login'] != pr['user']['login'] and r['user'].get('type') in ('User', 'Bot') for r in latest.values()), 'Current PR head requires an independent, non-dismissed approval')
+
+
+def approval(sha, branch, pr, environment, policies, event, commit, reviews, comparison=None):
+    require(sha == event['after'] == branch['commit']['sha'], 'Release SHA must be the current main HEAD')
     require(branch['protected'], 'Protect main before enabling releases')
-    require(any(p.get('merged_at') and p.get('merge_commit_sha') == sha and p.get('merged_by', {}).get('login') == OWNER and p['base']['ref'] == 'main' and p['base']['repo']['full_name'] == REPO for p in prs), 'Owner-merged main PR required')
+    require(pr.get('merged_at') and pr.get('merge_commit_sha') == sha and (pr.get('merged_by') or {}).get('login') == OWNER and pr['base']['ref'] == 'main' and pr['base']['repo']['full_name'] == REPO, 'Owner-merged main PR required')
+    require(not pr.get('draft') and pr.get('state') == 'closed', 'Merged non-draft PR required')
+    reviewed(pr, reviews)
+    require(commit['sha'] == sha, 'Commit lookup mismatch')
+    parents = [p['sha'] for p in commit['parents']]
+    if len(parents) == 2:
+        require(parents == [event['before'], pr['head']['sha']], 'Merge parents do not match push and reviewed PR head')
+    elif len(parents) == 1 and parents[0] == event['before']:
+        # GitHub merge_commit_sha is the squash commit, or the tip of a one-commit rebase.
+        pass
+    else:
+        # Multi-commit rebase: GitHub maps merge_commit_sha to its final rebased commit.
+        require(len(parents) == 1 and comparison is not None, 'Unsupported merge topology')
+        commits = comparison['commits']
+        require(comparison['status'] == 'ahead' and comparison['total_commits'] == pr['commits'] == len(commits) and 1 < len(commits) <= 250, 'Incomplete or unrelated rebased range')
+        previous = event['before']
+        for item in commits:
+            require([p['sha'] for p in item['parents']] == [previous], 'Rebase range must be a complete single-parent chain')
+            previous = item['sha']
+        require(previous == sha, 'Rebase range tip differs from approved merge')
+        pairs = comparison.get('patch_ids', [])
+        require(len(pairs) == len(commits) and all(re.fullmatch(r'[0-9a-f]{40}', original) and original == rebased for original, rebased in pairs), 'Rebased patches differ from reviewed PR commits')
     require(environment.get('deployment_branch_policy', {}).get('custom_branch_policies'), 'Environment must restrict deployment branches')
     require(policies == [{'name': 'main', 'type': 'branch'}], 'Environment must allow only main (no tags or wildcard branches)')
-    require(any(r['type'] == 'required_reviewers' and r.get('reviewers') for r in environment['protection_rules']), 'Signing Environment requires approval reviewers')
+    require(not any(r['type'] == 'required_reviewers' and r.get('reviewers') for r in environment['protection_rules']), 'Remove per-release Environment reviewers; owner PR merge is the approval')
+
+
+def patch_id(sha):
+    require(re.fullmatch(r'[0-9a-f]{40}', sha), 'Invalid rebase commit SHA')
+    diff = command(['gh', 'api', f'repos/{REPO}/commits/{sha}', '-H', 'Accept: application/vnd.github.diff'])
+    result = command(['git', 'patch-id', '--stable'], input=diff).split()
+    require(len(result) == 2 and re.fullmatch(r'[0-9a-f]{40}', result[0]), 'Unverifiable or empty rebased patch')
+    return result[0]
 
 
 def check_remote_approval(sha):
-    require(os.environ.get('GITHUB_TRIGGERING_ACTOR') == OWNER, 'Only owner may run or re-run release')
+    event = push_context(sha)
     branch = api('branches/main')
-    summaries = pages(f'commits/{sha}/pulls')
-    prs = [api(f'pulls/{p["number"]}') for p in summaries]
+    require(branch['protected'] and branch['commit']['sha'] == sha, 'Current protected main required')
+    prs = [api(f'pulls/{p["number"]}') for p in pages(f'commits/{sha}/pulls')]
+    matches = [p for p in prs if p.get('merged_at') and p.get('merge_commit_sha') == sha and (p.get('merged_by') or {}).get('login') == OWNER and p['base']['ref'] == 'main' and p['base']['repo']['full_name'] == REPO]
+    require(len(matches) == 1, 'Exactly one owner-merged main PR must identify this SHA')
+    pr = matches[0]
+    commit = api(f'git/commits/{sha}')
+    comparison = None
+    if len(commit['parents']) == 1 and commit['parents'][0]['sha'] != event['before']:
+        comparison = api(f'compare/{event["before"]}...{sha}')
+        originals = pages(f'pulls/{pr["number"]}/commits')
+        require(1 < len(originals) == pr['commits'] == comparison['total_commits'] == len(comparison['commits']) <= 250 and originals[-1]['sha'] == pr['head']['sha'], 'Incomplete original/rebased commit evidence')
+        comparison['patch_ids'] = [(patch_id(original['sha']), patch_id(rebased['sha'])) for original, rebased in zip(originals, comparison['commits'])]
     env = api(f'environments/{ENVIRONMENT}')
     policy_result = api(f'environments/{ENVIRONMENT}/deployment-branch-policies')
     require(policy_result['total_count'] == 1, 'Exactly one Environment deployment branch policy required')
-    policies = policy_result['branch_policies']
-    approval(os.environ.get('GITHUB_EVENT_NAME'), os.environ.get('GITHUB_ACTOR'), os.environ.get('GITHUB_REF'), os.environ.get('GITHUB_SHA'), sha, branch, prs, env, [{'name': p['name'], 'type': p['type']} for p in policies])
+    policies = [{'name': p['name'], 'type': p['type']} for p in policy_result['branch_policies']]
+    approval(sha, branch, pr, env, policies, event, commit, pages(f'pulls/{pr["number"]}/reviews'), comparison)
 
 
-def make_plan(tag, sha):
-    require(os.environ.get('MEMOEZ_RELEASE_ENABLED') == 'true', 'Release disabled: owner must finish setup and explicitly enable it')
-    cert = fingerprint(os.environ.get('MEMOEZ_RELEASE_CERT_SHA256', ''))
-    require(command(['git', 'rev-parse', 'HEAD'], cwd=ROOT).strip() == sha, 'Checkout differs from approved SHA')
-    check_remote_approval(sha)
+def latest_metadata(releases):
+    stable = [r for r in releases if not r['draft'] and not r['prerelease']]
+    for release in stable:
+        require(re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', release['tag_name']), 'Unknown stable release naming')
+    if not stable:
+        return None
+    latest = max(stable, key=lambda r: version(r['tag_name'][1:]))
+    name = latest['tag_name']
+    if version(name[1:]) <= version(POLICY['legacyVersionName']):
+        return None  # Explicit legacy baseline; not an assertion about old signing keys.
+    with tempfile.TemporaryDirectory() as tmp:
+        command(['gh', 'release', 'download', name, '--repo', REPO, '--pattern', f'memoez-{name}.json', '--dir', tmp])
+        meta = json.loads((Path(tmp) / f'memoez-{name}.json').read_text())
+    require(meta['schemaVersion'] == 1 and meta['applicationId'] == POLICY['applicationId'] and meta['versionName'] == name[1:] and type(meta['versionCode']) is int, 'Invalid published metadata')
+    return meta
+
+
+def decide(app, releases, tags, previous):
+    name, code = app['version'], app['android']['versionCode']
+    current = version(name)
+    require(app['android']['package'] == POLICY['applicationId'] and type(code) is int and 0 < code <= 2100000000, 'Invalid package or versionCode')
+    old_name = previous['versionName'] if previous else POLICY['legacyVersionName']
+    old_code = previous['versionCode'] if previous else POLICY['legacyVersionCode']
+    require(current >= version(old_name) and code >= old_code, 'Version rollback')
+    matching = [r for r in releases if r['tag_name'] == 'v' + name]
+    if current == version(old_name):
+        require(code == old_code, 'Same versionName has a different versionCode')
+        require(len(matching) == 1 and not matching[0]['draft'] and not matching[0]['prerelease'] and any(t['name'] == 'v' + name for t in tags), 'Published version must have exactly one stable Release and its tag')
+        require(not any(re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', t['name']) and version(t['name'][1:]) > current for t in tags), 'Unresolved future tag')
+        return 'skip'
+    require(code > old_code, 'versionCode must increase')
+    validate_version(app, 'v' + name, releases, tags, {'v' + old_name: previous} if previous else {})
+    return 'release'
+
+
+def make_plan(tag=None, sha=None):
+    sha = sha or os.environ.get('GITHUB_SHA')
+    push_context(sha)
+    require(command(['git', 'rev-parse', 'HEAD'], cwd=ROOT).strip() == sha, 'Checkout differs from triggering SHA')
     app = json.loads((ROOT / 'app.json').read_text())['expo']
     require(json.loads((ROOT / 'package.json').read_text())['version'] == app['version'], 'package.json/app.json version mismatch')
+    require(tag is None or tag == 'v' + app['version'], 'Plan/app version mismatch')
+    base = dict(tag='v' + app['version'], commit=sha, versionName=app['version'], versionCode=app['android']['versionCode'])
+    if os.environ.get('MEMOEZ_RELEASE_ENABLED') != 'true':
+        return dict(base, action='skip', reason='release disabled; initial owner setup pending')
     releases, tags = pages('releases'), pages('tags')
-    previous = {}
-    signed_history = [r['tag_name'] for r in releases if not r['draft'] and not r['prerelease'] and re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', r['tag_name']) and version(r['tag_name'][1:]) > version(POLICY['legacyVersionName'])]
-    if signed_history:
-        name = max(signed_history, key=lambda tag: version(tag[1:]))
-        with tempfile.TemporaryDirectory() as tmp:
-            command(['gh', 'release', 'download', name, '--repo', REPO, '--dir', tmp])
-            meta = json.loads((Path(tmp) / f'memoez-{name}.json').read_text())
-            require(re.fullmatch(r'[0-9a-f]{40}', meta['commit']), 'Invalid previous commit metadata')
-            previous_plan = dict(tag=name, applicationId=POLICY['applicationId'], versionName=name[1:], versionCode=meta['versionCode'], commit=meta['commit'], certificateSha256=cert)
-            # Do not trust unsigned JSON for the installed code: verify the previous APK itself.
-            verify_bundle(Path(tmp), previous_plan)
-            previous[name] = meta
-    code = validate_version(app, tag, releases, tags, previous)
-    title, notes = release_notes((ROOT / 'docs/release-note.md').read_text(), tag)
-    return {'tag': tag, 'commit': sha, 'versionName': app['version'], 'versionCode': code, 'applicationId': POLICY['applicationId'], 'certificateSha256': cert, 'title': title, 'notes': notes}
+    previous = latest_metadata(releases)
+    action = decide(app, releases, tags, previous)
+    if action == 'skip':
+        return dict(base, action='skip', reason='version already published')
+    cert = fingerprint(os.environ.get('MEMOEZ_RELEASE_CERT_SHA256', ''))
+    check_remote_approval(sha)
+    title, notes = release_notes((ROOT / 'docs/release-note.md').read_text(), base['tag'])
+    return dict(base, action='release', applicationId=POLICY['applicationId'], certificateSha256=cert, title=title, notes=notes, previous=previous)
+
+
+def verify_history(plan):
+    meta = plan['previous']
+    if meta is None:
+        return
+    require(re.fullmatch(r'[0-9a-f]{40}', meta['commit']), 'Invalid previous commit metadata')
+    previous_plan = dict(tag='v' + meta['versionName'], applicationId=POLICY['applicationId'], versionName=meta['versionName'], versionCode=meta['versionCode'], commit=meta['commit'], certificateSha256=plan['certificateSha256'])
+    with tempfile.TemporaryDirectory() as tmp:
+        command(['gh', 'release', 'download', previous_plan['tag'], '--repo', REPO, '--dir', tmp])
+        verify_bundle(Path(tmp), previous_plan)
 
 
 def tool(name):
@@ -226,7 +324,8 @@ def verify_uploaded_assets(assets, directory):
 
 def publish(directory, plan):
     # Recheck remote state immediately before creating anything. No write on a failed gate.
-    require(make_plan(plan['tag'], plan['commit']) == plan, 'Release approval/state changed')
+    require(plan.get('action') == 'release' and make_plan(plan['tag'], plan['commit']) == plan, 'Release approval/state changed')
+    verify_history(plan)
     sha = verify_bundle(directory, plan)
     api('git/refs', 'POST', {'ref': 'refs/tags/' + plan['tag'], 'sha': plan['commit']})
     created = api('releases', 'POST', {'tag_name': plan['tag'], 'target_commitish': plan['commit'], 'name': plan['title'], 'body': plan['notes'], 'draft': True, 'prerelease': False})
@@ -250,9 +349,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='cmd', required=True)
     p = sub.add_parser('plan')
-    p.add_argument('--tag', required=True)
-    p.add_argument('--commit', required=True)
     p.add_argument('--out', type=Path, required=True)
+    p = sub.add_parser('verify-history')
+    p.add_argument('--plan', type=Path, required=True)
     for name in ['sign', 'verify', 'publish']:
         p = sub.add_parser(name)
         p.add_argument('--plan', type=Path, required=True)
@@ -263,16 +362,25 @@ def main():
             p.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
     if args.cmd == 'plan':
-        require(re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', args.tag), 'Stable vX.Y.Z tag required')
-        require(re.fullmatch(r'[0-9a-f]{40}', args.commit), 'Full commit SHA required')
-        args.out.write_text(json.dumps(make_plan(args.tag, args.commit), indent=2) + '\n')
+        plan = make_plan()
+        args.out.write_text(json.dumps(plan, indent=2) + '\n')
+        if os.environ.get('GITHUB_OUTPUT'):
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                output.write('action=' + plan['action'] + '\n')
+        summary = f"## {plan['action']}\n{plan.get('reason', 'New release candidate; verification and publication still pending')}\nVersion: {plan['versionName']} / {plan['versionCode']}\nCommit: {plan['commit']}\n"
+        print(summary)
+        if os.environ.get('GITHUB_STEP_SUMMARY'):
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+                output.write(summary)
     else:
         plan = json.loads(args.plan.read_text())
         require(plan['tag'] == 'v' + plan['versionName'], 'Invalid plan tag')
         version(plan['versionName'])
         require(plan['applicationId'] == POLICY['applicationId'], 'Invalid plan application ID')
         require(plan['certificateSha256'] == fingerprint(os.environ.get('MEMOEZ_RELEASE_CERT_SHA256', '')), 'Expected certificate must match the plan')
-        if args.cmd == 'sign':
+        if args.cmd == 'verify-history':
+            verify_history(plan)
+        elif args.cmd == 'sign':
             sign(args.apk, plan, args.out)
         elif args.cmd == 'verify':
             print('Verified APK SHA-256: ' + verify_bundle(args.directory, plan))
@@ -285,5 +393,8 @@ if __name__ == '__main__':
         main()
     except Exception as error:
         # Only our controlled validation messages are printed, never third-party exception inputs.
+        if os.environ.get('GITHUB_STEP_SUMMARY'):
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+                output.write('## failed\nRelease guard refused this operation; inspect the failed step.\n')
         print('Release refused: ' + (str(error) if type(error) is ValueError else type(error).__name__), file=sys.stderr)
         sys.exit(1)

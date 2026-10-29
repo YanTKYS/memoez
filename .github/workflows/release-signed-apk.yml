@@ -1,17 +1,9 @@
 name: Release Signed APK
 
-# Deliberate owner action only. PRs, main pushes and tag pushes never publish.
+# The reviewed owner merge is approval. No manual tag/SHA inputs or per-release approval.
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Final stable tag matching app.json (vX.Y.Z)'
-        required: true
-        type: string
-      commit:
-        description: 'Full current main SHA, from an owner-merged release PR'
-        required: true
-        type: string
+  push:
+    branches: [main]
 
 permissions: {}
 concurrency:
@@ -24,7 +16,9 @@ env:
 
 jobs:
   plan:
-    if: github.ref == 'refs/heads/main' && github.actor == 'YanTKYS' && github.triggering_actor == 'YanTKYS'
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+    if: github.repository == 'YanTKYS/memoez' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -35,20 +29,27 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Decide release or skip without signing secrets or SDK installation
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release.py plan --out release-plan.json
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        if: steps.plan.outputs.action == 'release'
         with:
           java-version: '17'
           distribution: temurin
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        if: steps.plan.outputs.action == 'release'
         with:
           packages: 'build-tools;35.0.0'
-      - name: Require owner approval, protected main, increasing version, finalized notes and no collisions
+      - name: Verify latest published APK before building a new release
+        if: steps.plan.outputs.action == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
-          RELEASE_COMMIT: ${{ inputs.commit }}
-        run: python3 tools/release.py plan --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --out release-plan.json
+        run: python3 tools/release.py verify-history --plan release-plan.json
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: steps.plan.outputs.action == 'release'
         with:
           name: release-plan
           path: release-plan.json
@@ -57,6 +58,7 @@ jobs:
 
   build:
     needs: plan
+    if: needs.plan.outputs.action == 'release'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -93,8 +95,8 @@ jobs:
           retention-days: 1
 
   sign:
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.actor == 'YanTKYS' && github.triggering_actor == 'YanTKYS'
+    needs: [plan, build]
+    if: needs.plan.outputs.action == 'release' && github.ref == 'refs/heads/main'
     environment: release-signing
     runs-on: ubuntu-24.04
     permissions:
@@ -135,8 +137,8 @@ jobs:
           retention-days: 1
 
   publish:
-    needs: sign
-    if: github.ref == 'refs/heads/main' && github.actor == 'YanTKYS' && github.triggering_actor == 'YanTKYS'
+    needs: [plan, sign]
+    if: needs.plan.outputs.action == 'release' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -166,3 +168,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/release.py publish --plan input/plan/release-plan.json --directory dist >> "$GITHUB_STEP_SUMMARY"
+
+  report-failure:
+    needs: [plan, build, sign, publish]
+    if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report failure without publishing
+        run: echo '## failed — inspect the failed step and any partial tag/Draft before retrying' >> "$GITHUB_STEP_SUMMARY"

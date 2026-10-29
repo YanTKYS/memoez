@@ -12,6 +12,6 @@ debug APK は Actions Artifacts に14日を要求する（実際の保持期間�
 
 ## 正式配布
 
-`.github/workflows/release-signed-apk.yml` はオーナーの main からの手動起動専用。タグ push で公開しない。デフォルトは公開無効で、Environment と main 保護、証明書の固定値等が必須。
+`.github/workflows/release-signed-apk.yml` はmain push 起動で、API で確認したオーナーのレビュー済み PR マージを承認として新版だけ自動公開する。同じ版は SDK／release ビルド／署名前に正常 skip。PR・タグ・手動イベントからは公開せず、毎回の Environment 追加承認も使わない。デフォルトは公開無効で、Environment と main 保護、証明書の固定値等が必須。
 
 署名鍵の安全な初回設定・オーナーマージ／公開判断・3資産の配布契約・重複時の停止・旧 debug 端末からのバックアップ移行は **[releasing.md](releasing.md)** を参照。署名設定なしの unsigned 公開や beta／draft の正式公開は行わない。
