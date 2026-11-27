@@ -38,7 +38,8 @@
           "useSQLCipher": false
         }
       ],
-      "./plugins/withAndroidBuild"
+      "./plugins/withAndroidBuild",
+      "./plugins/withLegalNotices"
     ],
     "scheme": "memoez",
     "experiments": {

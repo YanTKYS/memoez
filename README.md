@@ -163,7 +163,7 @@ MemoEZ 自身のコードとドキュメントは [MIT License](LICENSE)（Copyr
 
 MIT License の対象外：
 
-- 第三者のコード・ライブラリ・フォント等。それぞれの元のライセンスに従います。主な依存と通知は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
+- 第三者のコード・ライブラリ・フォント等。それぞれの元のライセンスに従います。主な依存と通知は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、ライセンス全文は [legal/THIRD_PARTY_LICENSES.txt](legal/THIRD_PARTY_LICENSES.txt) を参照してください。ライセンス全文は APK の `assets/legal/` にも同梱されます。
 - アプリアイコン・スプラッシュ画像（`assets/`、`docs/app-icon-preview.png`）と「MemoEZ」の名称。権利確認が済むまで MIT の対象に含めません。
 - Google Drive 連携・Google API の利用条件、利用者が作成したメモ・バックアップ、署名鍵等。
 
