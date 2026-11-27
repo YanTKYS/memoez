@@ -152,6 +152,16 @@ jobs:
             || { echo "::error::list widget service must be protected by BIND_REMOTEVIEWS"; exit 1; }
           echo "Home screen widget is packaged"
 
+      # LICENSE と第三者ライセンス全文が APK の assets/legal に入っていることを確認する
+      - name: Verify license notices are packaged
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          for f in LICENSE.txt THIRD_PARTY_LICENSES.txt; do
+            unzip -l "$APK" "assets/legal/$f" | grep -q "assets/legal/$f" \
+              || { echo "::error::assets/legal/$f is missing from the APK"; exit 1; }
+          done
+          echo "License notices are packaged"
+
       - name: Run Lint
         if: github.event_name == 'pull_request'
         run: cd android && ./gradlew lintDebug -x checkKotlinGradlePluginConfigurationErrors --no-configuration-cache --no-daemon
