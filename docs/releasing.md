@@ -9,6 +9,7 @@
 - 同じ鍵を使い続ける。リリースごとの鍵生成・自動的な証明書ローテーションは禁止。v0.5.0 以前の Releases が正式な同一鍵だったとは仮定しない。既存 APK の証明書と手元の鍵をオーナーが確認し、異なる場合は下記の初回移行を行う。
 - Releases の正式資産は **3 個だけ**：`memoez-vX.Y.Z.apk`、`memoez-vX.Y.Z.apk.sha256`、`memoez-vX.Y.Z.json`。資産名を固定し、unsigned／debug APK は混ぜない。
 - `.apk.sha256` は SHA-256＋空白2個＋APKファイル名＋改行。JSON の schemaVersion は 1、`applicationId`、`versionName`、`versionCode`、`commit`、`certificateSha256`、`apkSha256`、`apkAsset` を持つ。次のアプリ内更新機能は stable・非 draft の Release だけを選び、JSON と APK のバージョン・証明書・ハッシュを照合する。インストーラーの署名検証を省略しない。
+- ライセンス：リポジトリは MIT（`LICENSE`）。APK に取り込まれる第三者部分の通知は `THIRD_PARTY_NOTICES.md`（各リリース JSON の `commit` 時点）で確認できる。依存を追加・更新したら同文書も更新する。Releases の資産は上記 3 個のまま増やさない。署名鍵・Secrets・利用者データは MIT の対象外。
 - v0.5.0 より後の公開版には、この JSON が必須。欠落・不整合・証明書変更・増加しない code は公開停止。最新の正式版は APK 自体を再取得して署名・実際の versionCode と JSON の一致を確認し、JSON の申告だけを信用しない。過去の資産やタグを自動上書きしない。
 
 ## 初回設定（オーナーが行う）
